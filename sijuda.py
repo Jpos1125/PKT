@@ -1,4 +1,7 @@
 # Aprašomi tokens
+from importlib.util import set_loader
+
+
 T_INT = 'INT'
 T_FLOAT = 'FLOAT'
 T_PLUS = 'PLUS'
@@ -16,6 +19,7 @@ class Token:
     def __init__(self, type_, value=None): # value pradinė reikšmė None, kadangi kai kurie tokens (pvz. +) neturi reikšmės
         self.type = type_
         self.value = value
+
 
     # Representation metodas, atliekamas automatiškai ir skirtas gražesniam atspausdinimui (pvz. rašant 1 + 2, bus gražiai atspausdinta INT:1 (tipas ir reikšmė), PLUS (tik tipas, kadangi nėra reikšmės), INT:2)
     def __repr__(self):
@@ -43,6 +47,11 @@ class CharError(Error):
 class SyntaxError(Error):
     def __init__(self, info=''):
         super().__init__('Neleistina sintaksė', info)
+
+class RTError(Error):
+    def __init__(self, info): # perduodamas error informacija
+        super().__init__('Neleistinas veiksmas', info)
+
 
 # Lexer klasė, skirta viską suskaidyti į tokens (pvz. 1 + 2 būtų suskaldytą į trys tokens: token(int, 1), token(plus, +) ir token(int, 2)
 class Lexer:
@@ -116,12 +125,13 @@ class Lexer:
 
 # klasė parser'iui priimti skaičius
 class NumberNode:
-	def __init__(self, token):
-		self.token = token
+    def __init__(self, token):
+        self.token = token
+
 
     # metodas gražiam atspausdinimui
-	def __repr__(self):
-		return f'{self.token}'
+    def __repr__(self):
+        return f'{self.token}'
 
 # klase parser'iui paprastoms operacijoms (sudėtis, atimtis, dalyba, daugyba)
 class SimpleOperatorNode:
@@ -237,6 +247,113 @@ class Parser:
 
         return result.success(left)
 
+
+# klasė run time errorams
+class RTResult:
+    def __init__(self):
+        self.value = None
+        self.error = None
+    
+    def register(self, res):
+        if res.error:
+             self.error = res.error
+        return res.value
+    
+    def success(self, value):
+        self.value = value
+        return self
+    
+    def failure(self, error):
+        self.error = error
+        return self
+
+
+# Skaičių klasė ju laikymui ir operavimui su jais
+class Number: 
+    def __init__(self, value):
+        self.value = value
+
+    def added_to(self, other): # gražina sudėties rezultata
+        if isinstance(other, Number): # jei reiksmė yra kitas skaičius
+            return Number(self.value + other.value), None  # None tai kad nera error atliekant operacija
+
+    def subbed_by(self, other): 
+        if isinstance(other, Number):
+            return Number(self.value - other.value), None
+
+    def multed_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value * other.value), None
+
+    # gali but div by 0 tai reikia patikrinti kad nebutu error
+    def dived_by(self, other):
+        if isinstance(other, Number):
+            if other.value == 0: # tikrinimas ar ne nulis
+                return None, RTError('Division by zero')   # value = None, Error = division by zero
+            return Number(self.value / other.value), None
+    
+    def __repr__(self):
+        return str(self.value)
+
+
+# interpretatoriaus class
+class Interpreter:
+    def visit(self, node): # pereina per nodes pagal node tipą 
+        method_name = f'visit_{type(node).__name__}' # indikatorius parodantis node tipą
+        method = getattr(self, method_name, self.no_visit_method) # gaunama kuris metodas turi but iškviestas
+        return method(node)
+    
+    def no_visit_method(self, node): # default iškviečiamas metodas
+        raise Exception(f'No visit_{type(node).__name__} method defined')
+
+    # metodai pagal tipus
+    def visit_NumberNode(self, node):
+        return RTResult().success( Number(node.token.value) ) # sukuriamas skaicius ir jis visados successful
+
+    def visit_SimpleOperatorNode(self, node):
+        res = RTResult() # runTime result class instance
+        left = res.register(self.visit(node.left_node)) # res.register() tikrina ar nera error
+        if res.error:  # tikrinama ar nera jokiu errors
+            return res
+
+        right = res.register(self.visit(node.right_node))
+        if res.error:  # tikrinama ar nera jokiu errors
+            return res
+
+        # tikrinama kuris operatorius
+        if node.operator_token.type == T_PLUS:
+            result, error = left.added_to(right) # nustato ir rezultata ir error
+        if node.operator_token.type == T_MINUS:
+            result, error = left.subbed_by(right)
+        if node.operator_token.type == T_MUL:
+             result, error = left.multed_by(right)
+        if node.operator_token.type == T_DIV:
+            result, error = left.dived_by(right)
+
+        # jei randa error nusiuncia i runtime error class failure, kitu atveju success
+        if error:
+            return res.failure(error) 
+        else:
+            return res.success(result)
+
+
+    def visit_UnaryOperatorNode(self, node):
+        res = RTResult() # runTime result class instance
+        
+        number = res.register(self.visit(node.node)) #tikrina ar nera error su unary operatorium
+        if res.error:
+            return res
+
+        # padauginamas skaičius iš -1
+        if node.operator_token.type == T_MINUS:
+            number, error = number.multed_by(Number(-1)) # grazina ir number ir error
+        
+        if error:
+            return res.failure(error) # siuncia i failure jei rastas error
+        else:
+            return res.success(number)
+
+
 # lexer'io paleidimui
 def run(text):
     lexer = Lexer(text)  # sukūriamas lexer'is su įvestu tekstu
@@ -248,4 +365,13 @@ def run(text):
 
     # generuojamas AST (abstrakčios sintaksės medis)
     astree = parser.parse()
-    return astree.node, astree.error
+
+    if astree.error: 
+        return None, astree.error
+
+    # sukuriamas interpretatorius
+    interpreter = Interpreter()
+
+    result = interpreter.visit(astree.node) # perduodamas astree node interpretatoriui pereit
+
+    return result.value, result.error
