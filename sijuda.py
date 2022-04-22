@@ -8,6 +8,7 @@ T_PLUS = 'PLUS'
 T_MINUS = 'MINUS'
 T_MUL = 'MUL'
 T_DIV = 'DIV'
+T_POW = 'POW'
 T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_END = 'END'
@@ -86,6 +87,9 @@ class Lexer:
                 self.advance()
             elif self.current_char == '/': # jeigu simbolis yra /, į tokens[] pridedamas naujas token T_DIV
                 tokens.append(Token(T_DIV))
+                self.advance()
+            elif self.current_char == '^': # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
+                tokens.append(Token(T_POW))
                 self.advance()
             elif self.current_char == '(': # jeigu simbolis yra (, į tokens[] pridedamas naujas token T_OPARENTHESES
                 tokens.append(Token(T_OPARENTHESES))
@@ -193,20 +197,11 @@ class Parser:
         if not result.error and self.current_token.type != T_END: # jeigu nėra klaidos ir dar nepasiektas galas
             return result.fail(SyntaxError("Reikia '+', '-', '*' or '/'")) # metama klaida, jog trūksta operacijos ženklo
         return result
-
-    # metodas dirbti su skaičių išsireiškimais
-    def factor(self):
+    def atom(self):
         result = ParseResult()
         token = self.current_token
 
-        if token.type in (T_PLUS, T_MINUS): # jeigu token yra + arba -
-            result.register(self.advance())
-            factor = result.register(self.factor()) # gaunamas naujas išsireiškimas
-            if result.error: # jeigu yra klaida
-                return result
-            return result.success(UnaryOperatorNode(token, factor))
-
-        elif token.type in (T_INT, T_FLOAT): # toliau jeigu token yra int arba float
+        if token.type in (T_INT, T_FLOAT): # toliau jeigu token yra int arba float
             result.register(self.advance())
             return result.success(NumberNode(token))
 
@@ -219,8 +214,23 @@ class Parser:
                 return result.success(expression)
             else: # jeigu nerandami tinkami skliaustai
                 return result.fail(SyntaxError("Trūksta simbolio ')'"))
+        return result.fail(SyntaxError("Tikimasi int, float, '+', '-', arba '('"))
 
-        return result.fail(SyntaxError("Reikia int arba float"))
+    def power(self):
+        return self.simple_operator(self.atom, (T_POW, ), self.factor)
+
+    # metodas dirbti su skaičių išsireiškimais
+    def factor(self):
+        result = ParseResult()
+        token = self.current_token
+
+        if token.type in (T_PLUS, T_MINUS): # jeigu token yra + arba -
+            result.register(self.advance())
+            factor = result.register(self.factor()) # gaunamas naujas išsireiškimas
+            if result.error: # jeigu yra klaida
+                return result
+            return result.success(UnaryOperatorNode(token, factor))
+        return self.power()
 
     # metodas dirbti su išsireiškimais, turinčiais daugybą ar dalybą
     def term(self):
@@ -231,16 +241,18 @@ class Parser:
         return self.simple_operator(self.term, (T_PLUS, T_MINUS))
 
     # metodas dirbti su išsireiškimais, kaip 1 + 2 ar (1 + 2) * 3) pagal poreikį
-    def simple_operator(self, func, operators): # poreikis nusprendžiamas pagal gautą term arba expression (func) ir ar +/-, ar dalyba/daugyba (operators)
+    def simple_operator(self, func_a, operators, func_b=None): # poreikis nusprendžiamas pagal gautą term arba expression (func) ir ar +/-, ar dalyba/daugyba (operators)
+        if func_b == None:
+            func_b = func_a
         result = ParseResult()
-        left = result.register(func()) # gaunamas kairysis skaičius
+        left = result.register(func_a()) # gaunamas kairysis skaičius
         if result.error: # jeigu yra klaida
             return result
 
         while self.current_token.type in operators:
             operator_token = self.current_token
             result.register(self.advance())
-            right = result.register(func()) # gaunamas dešinysis skaičius
+            right = result.register(func_b()) # gaunamas dešinysis skaičius
             if result.error: # jeigu yra klaida
                 return result
             left = SimpleOperatorNode(left, operator_token, right)
@@ -291,7 +303,10 @@ class Number:
             if other.value == 0: # tikrinimas ar ne nulis
                 return None, RTError('Division by zero')   # value = None, Error = division by zero
             return Number(self.value / other.value), None
-    
+    # kelimas ( ^ )
+    def powered_by(self, other):
+        if isinstance(other, Number):
+            return Number(self.value ** other.value), None
     def __repr__(self):
         return str(self.value)
 
@@ -329,6 +344,8 @@ class Interpreter:
              result, error = left.multed_by(right)
         if node.operator_token.type == T_DIV:
             result, error = left.dived_by(right)
+        if node.operator_token.type == T_POW:
+            result, error = left.powered_by(right)
 
         # jei randa error nusiuncia i runtime error class failure, kitu atveju success
         if error:
