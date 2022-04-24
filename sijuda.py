@@ -72,11 +72,8 @@ class Lexer:
 
     def make_tokens(self):
         tokens = [] # skirtas laikyti tokens
-
         while self.current_char != None:
-            if self.current_char in ' \t': # įvestame tekste ignoruojami tarpai ar tabuliacijos
-                self.advance()
-            elif self.current_char == '+': # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
+            if self.current_char == '+': # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
                 tokens.append(Token(T_PLUS))
                 self.advance()
             elif self.current_char == '-': # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
