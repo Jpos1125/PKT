@@ -1,19 +1,28 @@
 # Aprašomi tokens
+from ast import Expression, keyword
 from importlib.util import set_loader
 
+import string
+from symtable import Symbol
 
 T_INT = 'INT'
 T_FLOAT = 'FLOAT'
+T_IDENTIFIER = 'IDENTIFIER'
+T_KEYWORD = 'KEYWORD'
 T_PLUS = 'PLUS'
 T_MINUS = 'MINUS'
 T_MUL = 'MUL'
 T_DIV = 'DIV'
 T_POW = 'POW'
+T_EQ = 'EQ'
 T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_END = 'END'
 
+KEYWORDS = [ 'value' ]
 NUMBERS = '0123456789' # naudojama aptikti skaičius, jog galima būtų juos paversti į tokens
+LETTERS = string.ascii_letters
+LETTERS_NUMBERS = LETTERS + NUMBERS
 
 # Tokens klasė
 class Token:
@@ -21,6 +30,8 @@ class Token:
         self.type = type_
         self.value = value
 
+    def matches(self, type_, value):
+        return self.type == type_ and self.value == value
 
     # Representation metodas, atliekamas automatiškai ir skirtas gražesniam atspausdinimui (pvz. rašant 1 + 2, bus gražiai atspausdinta INT:1 (tipas ir reikšmė), PLUS (tik tipas, kadangi nėra reikšmės), INT:2)
     def __repr__(self):
@@ -73,7 +84,11 @@ class Lexer:
     def make_tokens(self):
         tokens = [] # skirtas laikyti tokens
         while self.current_char != None:
-            if self.current_char == '+': # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
+            if self.current_char in ' \t': # įvestame tekste ignoruojami tarpai ar tabuliacijos
+                self.advance()
+            elif self.current_char in LETTERS: # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
+                tokens.append(self.make_identifier())           
+            elif self.current_char == '+': # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
                 tokens.append(Token(T_PLUS))
                 self.advance()
             elif self.current_char == '-': # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
@@ -87,6 +102,9 @@ class Lexer:
                 self.advance()
             elif self.current_char == '^': # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
                 tokens.append(Token(T_POW))
+                self.advance()
+            elif self.current_char == '=': # jeigu simbolis yra =, į tokens[] pridedamas naujas token T_EQ
+                tokens.append(Token(T_EQ))
                 self.advance()
             elif self.current_char == '(': # jeigu simbolis yra (, į tokens[] pridedamas naujas token T_OPARENTHESES
                 tokens.append(Token(T_OPARENTHESES))
@@ -124,6 +142,18 @@ class Lexer:
         else: # jeigu suformuotame skaičiuje yra taškas, tai bus float
             return Token(T_FLOAT, float(number_string))
 
+    def make_identifier(self):
+        id_str = ''
+
+        # pildomas string for keyword token arba identifier token
+        while self.current_char != None and self.current_char in LETTERS_NUMBERS + '_':
+            id_str += self.current_char
+            self.advance()
+
+        # nusprendžiamas tipas
+        tok_type = T_KEYWORD if id_str in KEYWORDS else T_IDENTIFIER
+        return Token(tok_type, id_str)
+
 # klasė parser'iui priimti skaičius
 class NumberNode:
     def __init__(self, token):
@@ -133,6 +163,17 @@ class NumberNode:
     # metodas gražiam atspausdinimui
     def __repr__(self):
         return f'{self.token}'
+
+class ValueAccessNode:
+    def __init__(self, value_name_tok):
+        self.value_name_tok = value_name_tok
+
+
+class ValueAssignNode:
+    def __init__(self, value_name_tok, value_node):
+        self.value_name_tok = value_name_tok
+        self.value_node = value_node
+
 
 # klase parser'iui paprastoms operacijoms (sudėtis, atimtis, dalyba, daugyba)
 class SimpleOperatorNode:
@@ -160,20 +201,24 @@ class ParseResult:
 	def __init__(self):
 		self.error = None # jeigu yra klaida
 		self.node = None
+		self.advance_count = 0 # skaiciuoja kiek kartu buvo advanced funkcijoje
+
+    # skirtas tik for advancements
+	def register_advancement(self):
+		self.advance_count += 1
 
 	def register(self, result): # priima kita parser'io rezultatą
-		if isinstance(result, ParseResult): # jeigu result yra parser'io rezultatas
-			if result.error: self.error = result.error # jeigu result turi klaidos pranešimą, jus nustatomas
-			return result.node
-
-		return result
+		self.advance_count += result.advance_count
+		if result.error: self.error = result.error # jeigu result turi klaidos pranešimą, jus nustatomas
+		return result.node
 
 	def success(self, node):
 		self.node = node
 		return self
 
 	def fail(self, error):
-		self.error = error
+		if not self.error or self.advance_count == 0:
+			self.error = error
 		return self
 
 # parser'io klasė
@@ -199,19 +244,27 @@ class Parser:
         token = self.current_token
 
         if token.type in (T_INT, T_FLOAT): # toliau jeigu token yra int arba float
-            result.register(self.advance())
+            result.register_advancement()
+            self.advance()
             return result.success(NumberNode(token))
 
+        elif token.type == T_IDENTIFIER:
+            result.register_advancement()
+            self.advance()
+            return result.success(ValueAccessNode(token))
+
         elif token.type == T_OPARENTHESES: # toliau jeigu token yra simbolis '('
-            result.register(self.advance())
+            result.register_advancement()
+            self.advance()
             expression = result.register(self.expression()) # gaunamas naujas išsireiškimas
             if result.error: return result
             if self.current_token.type == T_CPARENTHESES: # jeigu token yra simbolis ')' (uždaromi skliaustai)
-                result.register(self.advance())
+                result.register_advancement()
+                self.advance()
                 return result.success(expression)
             else: # jeigu nerandami tinkami skliaustai
                 return result.fail(SyntaxError("Trūksta simbolio ')'"))
-        return result.fail(SyntaxError("Tikimasi int, float, '+', '-', arba '('"))
+        return result.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', arba '('"))
 
     def power(self):
         return self.simple_operator(self.atom, (T_POW, ), self.factor)
@@ -222,7 +275,8 @@ class Parser:
         token = self.current_token
 
         if token.type in (T_PLUS, T_MINUS): # jeigu token yra + arba -
-            result.register(self.advance())
+            result.register_advancement()
+            self.advance()
             factor = result.register(self.factor()) # gaunamas naujas išsireiškimas
             if result.error: # jeigu yra klaida
                 return result
@@ -235,7 +289,35 @@ class Parser:
 
     # metodas dirbti su išsireiškimais, turinčiais sudėtį ar atimtį
     def expression(self):
-        return self.simple_operator(self.term, (T_PLUS, T_MINUS))
+        res = ParseResult()
+
+        # pereinama per tokens jei prasideda zodziu "value"
+        # pirma value paskui Eq paskui išraiška
+        if self.current_token.matches(T_KEYWORD, 'value'):
+            res.register_advancement()
+            self.advance()
+
+            if self.current_token.type != T_IDENTIFIER:
+                return res.fail(SyntaxError("Trūksta identifikatoriaus"))
+
+            value_name = self.current_token
+            res.register_advancement()
+            self.advance()
+
+            if self.current_token.type != T_EQ:
+                return res.fail(SyntaxError("Trūksta '=' ženklo"))
+
+            res.register_advancement()
+            self.advance()
+            expression = res.register(self.expression())
+            if res.error: return res
+            return res.success(ValueAssignNode(value_name, expression))
+
+
+        node = res.register(self.simple_operator(self.term, (T_PLUS, T_MINUS))) 
+        if res.error: 
+            return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', arba '('"))
+        return res.success(node)
 
     # metodas dirbti su išsireiškimais, kaip 1 + 2 ar (1 + 2) * 3) pagal poreikį
     def simple_operator(self, func_a, operators, func_b=None): # poreikis nusprendžiamas pagal gautą term arba expression (func) ir ar +/-, ar dalyba/daugyba (operators)
@@ -248,7 +330,8 @@ class Parser:
 
         while self.current_token.type in operators:
             operator_token = self.current_token
-            result.register(self.advance())
+            result.register_advancement()
+            self.advance()
             right = result.register(func_b()) # gaunamas dešinysis skaičius
             if result.error: # jeigu yra klaida
                 return result
@@ -308,27 +391,73 @@ class Number:
         return str(self.value)
 
 
+class Context:
+    def __init__(self, display_name, parent=None):
+        self.display_name = display_name
+        self.parent = parent
+        self.symbol_table = None
+
+# simboliu class
+
+class SymbolTable:
+    def __init__(self):
+        self.symbols = {}
+        self.parent = None
+
+    def get(self, name):
+        value = self.symbols.get(name, None)
+        if value == None and self.parent:
+            return self.parent.get(name)
+        return value
+    
+    def set(self, name, value):
+        self.symbols[name] = value
+
+    def remove(self, name):
+        del self.symbols[name]
+
+
 # interpretatoriaus class
 class Interpreter:
-    def visit(self, node): # pereina per nodes pagal node tipą 
+    def visit(self, node, context): # pereina per nodes pagal node tipą 
         method_name = f'visit_{type(node).__name__}' # indikatorius parodantis node tipą
         method = getattr(self, method_name, self.no_visit_method) # gaunama kuris metodas turi but iškviestas
-        return method(node)
+        return method(node, context)
     
-    def no_visit_method(self, node): # default iškviečiamas metodas
+    def no_visit_method(self, node, context): # default iškviečiamas metodas
         raise Exception(f'No visit_{type(node).__name__} method defined')
 
     # metodai pagal tipus
-    def visit_NumberNode(self, node):
+    def visit_NumberNode(self, node, context):
         return RTResult().success( Number(node.token.value) ) # sukuriamas skaicius ir jis visados successful
 
-    def visit_SimpleOperatorNode(self, node):
+    def visit_ValueAccessNode(self, node, context):
+        res = RTResult()
+        value_name = node.value_name_tok.value
+        value = context.symbol_table.get(value_name)
+
+        # jei nebuvo aprasytas kintamasis
+        if not value:
+            return res.failure(RTError(f"'{value_name} nerastas"))
+
+        return res.success(value)
+
+    def visit_ValueAssignNode(self, node, context):
+        res = RTResult()
+        value_name = node.value_name_tok.value
+        value = res.register(self.visit(node.value_node, context))
+        if res.error: return res
+
+        context.symbol_table.set(value_name, value)
+        return res.success(value)
+    
+    def visit_SimpleOperatorNode(self, node, context):
         res = RTResult() # runTime result class instance
-        left = res.register(self.visit(node.left_node)) # res.register() tikrina ar nera error
+        left = res.register(self.visit(node.left_node, context)) # res.register() tikrina ar nera error
         if res.error:  # tikrinama ar nera jokiu errors
             return res
 
-        right = res.register(self.visit(node.right_node))
+        right = res.register(self.visit(node.right_node, context))
         if res.error:  # tikrinama ar nera jokiu errors
             return res
 
@@ -351,10 +480,10 @@ class Interpreter:
             return res.success(result)
 
 
-    def visit_UnaryOperatorNode(self, node):
+    def visit_UnaryOperatorNode(self, node, context):
         res = RTResult() # runTime result class instance
         
-        number = res.register(self.visit(node.node)) #tikrina ar nera error su unary operatorium
+        number = res.register(self.visit(node.node, context)) #tikrina ar nera error su unary operatorium
         if res.error:
             return res
 
@@ -367,6 +496,9 @@ class Interpreter:
         else:
             return res.success(number)
 
+
+global_symbol_table = SymbolTable()
+global_symbol_table.set("null", Number(0))
 
 # lexer'io paleidimui
 def run(text):
@@ -385,7 +517,8 @@ def run(text):
 
     # sukuriamas interpretatorius
     interpreter = Interpreter()
-
-    result = interpreter.visit(astree.node) # perduodamas astree node interpretatoriui pereit
+    context = Context('<program>')
+    context.symbol_table = global_symbol_table
+    result = interpreter.visit(astree.node, context) # perduodamas astree node interpretatoriui pereit
 
     return result.value, result.error
