@@ -15,11 +15,17 @@ T_MUL = 'MUL'
 T_DIV = 'DIV'
 T_POW = 'POW'
 T_EQ = 'EQ'
+T_EE = 'EE' #double equals
+T_NE = 'NE'
+T_LT = 'LT'
+T_GT = 'GT'
+T_LTE = 'LTE'
+T_GTE = 'GTE'
 T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_END = 'END'
 
-KEYWORDS = [ 'value' ]
+KEYWORDS = [ 'value', 'and', 'or', 'not' ]
 NUMBERS = '0123456789' # naudojama aptikti skaičius, jog galima būtų juos paversti į tokens
 LETTERS = string.ascii_letters
 LETTERS_NUMBERS = LETTERS + NUMBERS
@@ -55,6 +61,11 @@ class Error:
 class CharError(Error):
     def __init__(self, info):
         super().__init__('Neleistinas simbolis', info)
+
+# klasė skirta pranešti, kad tikimasi kažkokio simbolio išraiškoje
+class ExpectedCharError(Error):
+    def __init__(self, info):
+        super().__init__('Tikimasi simbolio ', info)
 
 class SyntaxError(Error):
     def __init__(self, info=''):
@@ -103,9 +114,6 @@ class Lexer:
             elif self.current_char == '^': # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
                 tokens.append(Token(T_POW))
                 self.advance()
-            elif self.current_char == '=': # jeigu simbolis yra =, į tokens[] pridedamas naujas token T_EQ
-                tokens.append(Token(T_EQ))
-                self.advance()
             elif self.current_char == '(': # jeigu simbolis yra (, į tokens[] pridedamas naujas token T_OPARENTHESES
                 tokens.append(Token(T_OPARENTHESES))
                 self.advance()
@@ -114,6 +122,17 @@ class Lexer:
                 self.advance()
             elif self.current_char in NUMBERS: # jeigu simbolis yra 0-9, formuojamas skaičius (int arba float)
                 tokens.append(self.make_number())
+            elif self.current_char == '!':
+                tok, error = self.make_not_equals() # patikrins ar po ! yra = zenklas jei taip, no error
+                if error: return [], error
+                tokens.append(tok)
+            elif self.current_char == '=': # jeigu simbolis yra =, į tokens[] pridedamas naujas token T_EQ
+                tokens.append(self.make_equals())
+            elif self.current_char == '<': # jeigu simbolis yra <, į tokens[] pridedamas naujas token T_LT
+                tokens.append(self.make_less_than())
+            elif self.current_char == '>': # jeigu simbolis yra >, į tokens[] pridedamas naujas token T_GT
+                tokens.append(self.make_greater_than())
+
             else: # jeigu įvedamas neaprašytas simbolis, metama klaida
                 illegal_char = self.current_char
                 self.advance()
@@ -153,6 +172,43 @@ class Lexer:
         # nusprendžiamas tipas
         tok_type = T_KEYWORD if id_str in KEYWORDS else T_IDENTIFIER
         return Token(tok_type, id_str)
+
+    def make_not_equals(self):
+        self.advance() # pirmasis simbolis jau zinoma, kad '!'
+
+        if self.current_char == '=':
+            self.advance()
+            return Token(T_NE), None # None, nes nera error
+        
+        self.advance() 
+        return None, ExpectedCharError("Trūksta '=' po '!' ženklo") # error, nes nera !=
+
+    def make_equals(self):
+        tok_type = T_EQ
+        self.advance() # jau zinoma, kad einamasis simbolis yra '=' , tai pereinama toliau
+        if self.current_char == '=': # jei antrasis simbolis irgi =, tai sukuriamas double equals, kitu atvejus single
+            self.advance()
+            tok_type = T_EE
+
+        return Token(tok_type)
+
+    def make_less_than(self):
+        tok_type = T_LT
+        self.advance() 
+        if self.current_char == '=': 
+            self.advance()
+            tok_type = T_LTE
+
+        return Token(tok_type)
+
+    def make_greater_than(self):
+        tok_type = T_GT
+        self.advance() # jau zinoma, kad einamasis simbolis yra '>' , tai pereinama toliau
+        if self.current_char == '=': # jei antrasis simbolis  =, tai sukuriamas greater or equal, kitu atveju greater
+            self.advance()
+            tok_type = T_GTE
+
+        return Token(tok_type)
 
 # klasė parser'iui priimti skaičius
 class NumberNode:
@@ -287,6 +343,30 @@ class Parser:
     def term(self):
         return self.simple_operator(self.factor, (T_MUL, T_DIV))
 
+    def comp_expr(self):
+        res = ParseResult()
+
+        # jei token yra ne not, tai reiskia, kad tai yra aritmetine israiska
+        if self.current_token.matches(T_KEYWORD, 'not'):
+            op_tok = self.current_token
+            res.register_advancement()
+            self.advance()
+
+            node = res.register(self.comp_expr())
+            if res.error: return res
+            return res.success(UnaryOperatorNode(op_tok, node))
+        
+        node = res.register(self.simple_operator(self.arith_expr, (T_EE, T_NE, T_LT, T_GT, T_LTE, T_GTE))) # galimi zenklai
+
+        if res.error:
+            return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', '(', 'not'"))
+
+        return res.success(node)
+
+    def arith_expr(self):
+        return self.simple_operator(self.term, (T_PLUS, T_MINUS))
+
+
     # metodas dirbti su išsireiškimais, turinčiais sudėtį ar atimtį
     def expression(self):
         res = ParseResult()
@@ -314,7 +394,7 @@ class Parser:
             return res.success(ValueAssignNode(value_name, expression))
 
 
-        node = res.register(self.simple_operator(self.term, (T_PLUS, T_MINUS))) 
+        node = res.register(self.simple_operator(self.comp_expr, ((T_KEYWORD, "and"), (T_KEYWORD, "or")))) 
         if res.error: 
             return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', arba '('"))
         return res.success(node)
@@ -328,7 +408,7 @@ class Parser:
         if result.error: # jeigu yra klaida
             return result
 
-        while self.current_token.type in operators:
+        while self.current_token.type in operators or (self.current_token.type, self.current_token.value) in operators:
             operator_token = self.current_token
             result.register_advancement()
             self.advance()
@@ -387,6 +467,44 @@ class Number:
     def powered_by(self, other):
         if isinstance(other, Number):
             return Number(self.value ** other.value), None
+
+    # comparison metodai
+    # 0 = false, 1 = true yra palyginama reiksme ir grazinama boolean'o int() rezultatas ir None error
+    def get_comparison_eq(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value == other.value)), None
+
+    def get_comparison_ne(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value != other.value)), None 
+    
+    def get_comparison_lt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value < other.value)), None 
+    
+    def get_comparison_gt(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value > other.value)), None 
+
+    def get_comparison_lte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value <= other.value)), None 
+
+    def get_comparison_gte(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value >= other.value)), None 
+
+    def anded_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value and other.value)), None 
+    
+    def ored_by(self, other):
+        if isinstance(other, Number):
+            return Number(int(self.value or other.value)), None 
+    
+    def notted(self):
+        return Number(1 if self.value == 0 else 0), None
+
     def __repr__(self):
         return str(self.value)
 
@@ -464,14 +582,30 @@ class Interpreter:
         # tikrinama kuris operatorius
         if node.operator_token.type == T_PLUS:
             result, error = left.added_to(right) # nustato ir rezultata ir error
-        if node.operator_token.type == T_MINUS:
+        elif node.operator_token.type == T_MINUS:
             result, error = left.subbed_by(right)
-        if node.operator_token.type == T_MUL:
+        elif node.operator_token.type == T_MUL:
              result, error = left.multed_by(right)
-        if node.operator_token.type == T_DIV:
+        elif node.operator_token.type == T_DIV:
             result, error = left.dived_by(right)
-        if node.operator_token.type == T_POW:
+        elif node.operator_token.type == T_POW:
             result, error = left.powered_by(right)
+        elif node.operator_token.type == T_EE:
+            result, error = left.get_comparison_eq(right)
+        elif node.operator_token.type == T_NE:
+            result, error = left.get_comparison_ne(right)
+        elif node.operator_token.type == T_LT:
+            result, error = left.get_comparison_lt(right)
+        elif node.operator_token.type == T_GT:
+            result, error = left.get_comparison_gt(right)
+        elif node.operator_token.type == T_LTE:
+            result, error = left.get_comparison_lte(right)
+        elif node.operator_token.type == T_GTE:
+            result, error = left.get_comparison_gte(right)
+        elif node.operator_token.matches(T_KEYWORD, 'and'):
+            result, error = left.anded_by(right)
+        elif node.operator_token.matches(T_KEYWORD, 'or'):
+            result, error = left.ored_by(right)
 
         # jei randa error nusiuncia i runtime error class failure, kitu atveju success
         if error:
@@ -490,7 +624,10 @@ class Interpreter:
         # padauginamas skaičius iš -1
         if node.operator_token.type == T_MINUS:
             number, error = number.multed_by(Number(-1)) # grazina ir number ir error
-        
+        elif node.operator_token.matches(T_KEYWORD, 'not'): # 1 => 0   0 => 1
+            nubmer, error = number.notted()
+
+
         if error:
             return res.failure(error) # siuncia i failure jei rastas error
         else:
@@ -499,6 +636,8 @@ class Interpreter:
 
 global_symbol_table = SymbolTable()
 global_symbol_table.set("null", Number(0))
+global_symbol_table.set("true", Number(1))
+global_symbol_table.set("false", Number(0))
 
 # lexer'io paleidimui
 def run(text):
