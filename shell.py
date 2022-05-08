@@ -5,5 +5,5 @@ while True:
     result, error = sijuda.run(input_text)
     if error:
         print(error.to_string())
-    else:
+    elif result:
         print(result)

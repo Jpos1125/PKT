@@ -25,7 +25,7 @@ T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_END = 'END'
 
-KEYWORDS = [ 'value', 'and', 'or', 'not' ]
+KEYWORDS = [ 'value', 'and', 'or', 'not', 'if', 'then', 'elif', 'else']
 NUMBERS = '0123456789' # naudojama aptikti skaičius, jog galima būtų juos paversti į tokens
 LETTERS = string.ascii_letters
 LETTERS_NUMBERS = LETTERS + NUMBERS
@@ -252,6 +252,11 @@ class UnaryOperatorNode:
     def __repr__(self):
         return f'({self.operator_token}, {self.node})'
 
+class IfNode:
+    def __init__(self, cases, else_case):
+        self.cases = cases
+        self.else_case = else_case
+
 # klasė skirta patikrinti ar parser'io rezultatas neturi klaidų
 class ParseResult:
 	def __init__(self):
@@ -320,6 +325,12 @@ class Parser:
                 return result.success(expression)
             else: # jeigu nerandami tinkami skliaustai
                 return result.fail(SyntaxError("Trūksta simbolio ')'"))
+
+        elif token.matches(T_KEYWORD, 'if'):
+            if_expr = result.register(self.if_expr())
+            if result.error: return result
+            return result.success(if_expr)
+
         return result.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', arba '('"))
 
     def power(self):
@@ -419,6 +430,60 @@ class Parser:
 
         return result.success(left)
 
+    def if_expr(self):
+        res = ParseResult()
+        cases = []
+        else_case = None
+
+        if not self.current_token.matches(T_KEYWORD, 'if'):
+            failMes = f"Expected 'IF'"
+            return res.fail(SyntaxError(failMes))
+
+        res.register_advancement()
+        self.advance()
+        condition = res.register(self.expression())
+
+
+        if res.error: return res
+        if not self.current_token.matches(T_KEYWORD, 'then'):
+            failMes = f"Expected 'then'"
+            return res.fail(SyntaxError(
+                failMes
+            ))
+        res.register_advancement()
+        self.advance()
+
+        expr = res.register(self.expression())
+        if res.error: return res
+        cases.append((condition, expr))
+
+        while self.current_token.matches(T_KEYWORD, 'elif'):
+            res.register_advancement()
+            self.advance()
+
+            condition = res.register(self.expression())
+            if res.error: return res
+
+            if not self.current_token.matches(T_KEYWORD, 'then'):
+                failMes = f"Expected 'then/elif'"
+                return res.fail(failMes)
+
+
+            res.register_advancement()
+            self.advance()
+
+            expr = res.register(self.expression())
+            if res.error: return  res
+            cases.append((condition, expr))
+
+        if self.current_token.matches(T_KEYWORD, 'else'):
+            res.register_advancement()
+            self.advance()
+
+            else_case = res.register(self.expression())
+            if res.error: return res
+
+        return res.success(IfNode(cases, else_case))
 
 # klasė run time errorams
 class RTResult:
@@ -504,6 +569,9 @@ class Number:
     
     def notted(self):
         return Number(1 if self.value == 0 else 0), None
+
+    def is_true(self):
+        return self.value != 0
 
     def __repr__(self):
         return str(self.value)
@@ -632,6 +700,25 @@ class Interpreter:
             return res.failure(error) # siuncia i failure jei rastas error
         else:
             return res.success(number)
+
+    def visit_IfNode(self, node, context):
+        res = RTResult()
+
+        for condition, expr in node.cases:
+            condition_value = res.register(self.visit(condition, context))
+            if res.error: return res
+
+            if condition_value.is_true():
+                expr_value = res.register(self.visit(expr, context))
+                if res.error: return res
+                return res.success(expr_value)
+
+        if node.else_case:
+            else_value = res.register(self.visit(node.else_case, context))
+            if res.error: return res
+            return res.success(else_value)
+
+        return res.success(None)
 
 
 global_symbol_table = SymbolTable()
