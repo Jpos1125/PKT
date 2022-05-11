@@ -108,15 +108,19 @@ class Lexer:
             elif self.current_char in LETTERS:  # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
                 tokens.append(self.make_identifier())
             elif self.current_char == '+':  # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
+                playsound('sounds/1.mp3')
                 tokens.append(Token(T_PLUS))
                 self.advance()
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
+                playsound('sounds/2.mp3')
                 tokens.append(Token(T_MINUS))
                 self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
+                playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
                 self.advance()
             elif self.current_char == '/':  # jeigu simbolis yra /, į tokens[] pridedamas naujas token T_DIV
+                playsound('sounds/4.mp3')
                 tokens.append(Token(T_DIV))
                 self.advance()
             elif self.current_char == '^':  # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
@@ -616,7 +620,6 @@ class RTResult:
         return res.value
 
     def success(self, value):
-        playsound('sounds/1.mp3')
         self.value = value
         return self
 
