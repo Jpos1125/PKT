@@ -3,6 +3,7 @@ from ast import Expression, keyword
 from importlib.util import set_loader
 
 import string
+from playsound import playsound
 from symtable import Symbol
 
 T_INT = 'INT'
@@ -615,6 +616,7 @@ class RTResult:
         return res.value
 
     def success(self, value):
+        playsound('sounds/1.mp3')
         self.value = value
         return self
 
