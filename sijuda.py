@@ -863,6 +863,7 @@ class Interpreter:
         else:
             condition = lambda: i > end_value.value
         while condition():
+            playsound('sounds/3.mp3')
             context.symbol_table.set(node.var_name_tok.value, Number(i))
             i += step_value.value
 
@@ -875,6 +876,7 @@ class Interpreter:
         res = RTResult()
 
         while True:
+            playsound('sounds/3.mp3')
             condition = res.register(self.visit(node.condition_node, context))
             if res.error: return res
 
