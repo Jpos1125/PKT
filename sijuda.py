@@ -1,4 +1,3 @@
-# Aprašomi tokens
 from ast import Expression, keyword
 from importlib.util import set_loader
 
@@ -6,6 +5,7 @@ import string
 from playsound import playsound
 from symtable import Symbol
 
+# Aprašomi tokens
 T_INT = 'INT'
 T_FLOAT = 'FLOAT'
 T_IDENTIFIER = 'IDENTIFIER'
@@ -25,8 +25,10 @@ T_GTE = 'GTE'
 T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_END = 'END'
+T_COMMA = 'COMMA'
+T_ARROW = 'ARROW'
 
-KEYWORDS = ['value', 'and', 'or', 'not', 'if', 'then', 'elif', 'else', 'for', 'to', 'step', 'while']
+KEYWORDS = ['value', 'and', 'or', 'not', 'if', 'then', 'elif', 'else', 'for', 'to', 'step', 'while', 'func']
 NUMBERS = '0123456789'  # naudojama aptikti skaičius, jog galima būtų juos paversti į tokens
 LETTERS = string.ascii_letters
 LETTERS_NUMBERS = LETTERS + NUMBERS
@@ -112,9 +114,10 @@ class Lexer:
                 tokens.append(Token(T_PLUS))
                 self.advance()
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
-                playsound('sounds/2.mp3')
-                tokens.append(Token(T_MINUS))
-                self.advance()
+                tokens.append(self.make_minus_or_arrow())
+              #  playsound('sounds/2.mp3')
+              #  tokens.append(Token(T_MINUS))
+              #  self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
                 playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
@@ -144,6 +147,9 @@ class Lexer:
                 tokens.append(self.make_less_than())
             elif self.current_char == '>':  # jeigu simbolis yra >, į tokens[] pridedamas naujas token T_GT
                 tokens.append(self.make_greater_than())
+            elif self.current_char == ',':  # jeigu simbolis yra ',', į tokens[] pridedamas naujas token T_COMMA
+                tokens.append(Token(T_COMMA))
+                self.advance()
 
             else:  # jeigu įvedamas neaprašytas simbolis, metama klaida
                 illegal_char = self.current_char
@@ -184,6 +190,16 @@ class Lexer:
         # nusprendžiamas tipas
         tok_type = T_KEYWORD if id_str in KEYWORDS else T_IDENTIFIER
         return Token(tok_type, id_str)
+
+    def make_minus_or_arrow(self):
+        tok_type = T_MINUS
+        self.advance()
+
+        if self.current_char == '>': # jeigu po ženklo - seka ženklas >, sureaguojama, kad tai yra ->
+            self.advance()
+            tok_type = T_ARROW
+
+        return Token(tok_type)
 
     def make_not_equals(self):
         self.advance()  # pirmasis simbolis jau zinoma, kad '!'
@@ -288,6 +304,16 @@ class WhileNode:
         self.condition_node = condition_node
         self.body_node = body_node
 
+class FuncNode:
+    def __init__(self, var_name_tok, arg_name_toks, body_node):
+        self.var_name_tok = var_name_tok
+        self.arg_name_toks = arg_name_toks
+        self.body_node = body_node
+
+class CallNode:
+    def __init__(self, node_to_call, arg_nodes):
+        self.node_to_call = node_to_call
+        self.arg_nodes = arg_nodes
 
 # klasė skirta patikrinti ar parser'io rezultatas neturi klaidų
 class ParseResult:
@@ -335,6 +361,41 @@ class Parser:
                 SyntaxError("Reikia '+', '-', '*' or '/'"))  # metama klaida, jog trūksta operacijos ženklo
         return result
 
+    def call(self):
+        res = ParseResult()
+        atom = res.register(self.atom())
+        if res.error: return res
+
+        if self.current_token.type == T_OPARENTHESES:
+            res.register_advancement()
+            self.advance()
+            arg_nodes = []
+
+            if self.current_token.type == T_CPARENTHESES:
+                res.register_advancement()
+                self.advance()
+            else:
+                arg_nodes.append(res.register(self.expression()))
+                if res.error:
+                    return res.fail(SyntaxError("Trūksta simbolio ')', value, if, for, while, func, int, float, identifier"))
+
+                while self.current_token.type == T_COMMA:
+                    res.register_advancement()
+                    self.advance()
+
+                    arg_nodes.append(res.register(self.expression()))
+                    if res.error: return res
+
+                if self.current_token.type != T_CPARENTHESES:
+                    return res.fail(
+                        SyntaxError("Trūksta simbolio ',' ar ')'"
+                    ))
+
+                res.register_advancement()
+                self.advance()
+            return res.success(CallNode(atom, arg_nodes))
+        return res.success(atom)
+
     def atom(self):
         result = ParseResult()
         token = self.current_token
@@ -376,10 +437,15 @@ class Parser:
             if result.error: return result
             return result.success(while_expr)
 
-        return result.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', arba '('"))
+        elif token.matches(T_KEYWORD, 'func'):
+            func_def = result.register(self.func_def())
+            if result.error: return result
+            return result.success(func_def)
+
+        return result.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', '(', if, for, while arba func"))
 
     def power(self):
-        return self.simple_operator(self.atom, (T_POW,), self.factor)
+        return self.simple_operator(self.call, (T_POW,), self.factor)
 
     # metodas dirbti su skaičių išsireiškimais
     def factor(self):
@@ -451,7 +517,7 @@ class Parser:
 
         node = res.register(self.simple_operator(self.comp_expr, ((T_KEYWORD, "and"), (T_KEYWORD, "or"))))
         if res.error:
-            return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', arba '('"))
+            return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', '(', if, for, while arba func"))
         return res.success(node)
 
     # metodas dirbti su išsireiškimais, kaip 1 + 2 ar (1 + 2) * 3) pagal poreikį
@@ -585,6 +651,84 @@ class Parser:
 
         return res.success(ForNode(var_name, start_value, end_value, step_value, body))
 
+    def func_def(self):
+        res = ParseResult()
+
+        if not self.current_token.matches(T_KEYWORD, 'func'):
+            return res.fail(SyntaxError(
+                f"Expected'func'"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        if self.current_token.type == T_IDENTIFIER:
+            var_name_tok = self.current_token
+            res.register_advancement()
+            self.advance()
+            if self.current_token.type != T_OPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Expected'('"
+                ))
+        else:
+            var_name_tok = None
+            if self.current_token.type != T_OPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Tikimasi identifier arba '('"
+                ))
+
+        res.register_advancement()
+        self.advance()
+        arg_name_toks = []
+
+        if self.current_token.type == T_IDENTIFIER:
+            arg_name_toks.append(self.current_token)
+            res.register_advancement()
+            self.advance()
+
+            while self.current_token.type == T_COMMA:
+                res.register_advancement()
+                self.advance()
+
+                if self.current_token.type != T_IDENTIFIER:
+                    return res.fail(SyntaxError(
+                        f"Tikimasi identifier"
+                    ))
+
+                arg_name_toks.append(self.current_token)
+                res.register_advancement()
+                self.advance()
+
+            if self.current_token.type != T_CPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Tikimasi ',' arba ')'"
+                ))
+        else:
+            if self.current_token.type != T_CPARENTHESES:
+                 return res.fail(SyntaxError(
+                    f"Tikimasi identifier arba ')'"
+                ))
+
+        res.register_advancement()
+        self.advance()
+
+        if self.current_token.type != T_ARROW:
+            if self.current_token.type != T_ARROW:
+                return res.fail(SyntaxError(
+                    f"Tikimasi '->'"
+                ))
+
+        res.register_advancement()
+        self.advance()
+        node_to_return = res.register(self.expression())
+        if res.error: return res
+
+        return res.success(FuncNode(
+            var_name_tok,
+            arg_name_toks,
+            node_to_return
+        ))
+
     def while_expr(self):
         res = ParseResult()
 
@@ -627,72 +771,167 @@ class RTResult:
         self.error = error
         return self
 
+class Value:
+    def __init__(self):
+        self.set_context()
+
+    def set_context(self, context=None):
+        self.context = context
+        return self
+
+    def added_to(self, other):
+        return None, self.illegal_operation(other)
+
+    def subbed_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def multed_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def dived_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def powed_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_eq(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_ne(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_lt(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_gt(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_lte(self, other):
+        return None, self.illegal_operation(other)
+
+    def get_comparison_gte(self, other):
+        return None, self.illegal_operation(other)
+
+    def anded_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def ored_by(self, other):
+        return None, self.illegal_operation(other)
+
+    def notted(self, other):
+        return None, self.illegal_operation(other)
+
+    def execute(self, args):
+        return RTResult().failure(self.illegal_operation())
+
+    def copy(self):
+        raise Exception('Copy metodas nedeklaruotas')
+
+    def is_true(self):
+        return False
+
+    def illegal_operation(self, other=None):
+        if not other: other = self
+        return RTError(
+            'Negalima operacija'
+        )
 
 # Skaičių klasė ju laikymui ir operavimui su jais
-class Number:
+class Number(Value):
     def __init__(self, value):
         self.value = value
 
     def added_to(self, other):  # gražina sudėties rezultata
         if isinstance(other, Number):  # jei reiksmė yra kitas skaičius
-            return Number(self.value + other.value), None  # None tai kad nera error atliekant operacija
+            return Number(self.value + other.value).set_context(self.context), None  # None tai kad nera error atliekant operacija
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def subbed_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value - other.value), None
+            return Number(self.value - other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def multed_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value * other.value), None
+            return Number(self.value * other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     # gali but div by 0 tai reikia patikrinti kad nebutu error
     def dived_by(self, other):
         if isinstance(other, Number):
             if other.value == 0:  # tikrinimas ar ne nulis
-                return None, RTError('Division by zero')  # value = None, Error = division by zero
-            return Number(self.value / other.value), None
+                return None, RTError('Dalyba is nulio')  # value = None, Error = division by zero
+            return Number(self.value / other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     # kelimas ( ^ )
     def powered_by(self, other):
         if isinstance(other, Number):
-            return Number(self.value ** other.value), None
+            return Number(self.value ** other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     # comparison metodai
     # 0 = false, 1 = true yra palyginama reiksme ir grazinama boolean'o int() rezultatas ir None error
     def get_comparison_eq(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value == other.value)), None
+            return Number(int(self.value == other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def get_comparison_ne(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value != other.value)), None
+            return Number(int(self.value != other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def get_comparison_lt(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value < other.value)), None
+            return Number(int(self.value < other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def get_comparison_gt(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value > other.value)), None
+            return Number(int(self.value > other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def get_comparison_lte(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value <= other.value)), None
+            return Number(int(self.value <= other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def get_comparison_gte(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value >= other.value)), None
+            return Number(int(self.value >= other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def anded_by(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value and other.value)), None
+            return Number(int(self.value and other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def ored_by(self, other):
         if isinstance(other, Number):
-            return Number(int(self.value or other.value)), None
+            return Number(int(self.value or other.value)).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
 
     def notted(self):
-        return Number(1 if self.value == 0 else 0), None
+        return Number(1 if self.value == 0 else 0).set_context(self.context), None
+
+    def copy(self):
+        copy = Number(self.value)
+        copy.set_context(self.context)
+        return copy
 
     def is_true(self):
         return self.value != 0
@@ -700,6 +939,47 @@ class Number:
     def __repr__(self):
         return str(self.value)
 
+
+class Function(Value):
+    def __init__(self, name, body_node, arg_names):
+        super().__init__()
+        self.name = name or "[anonimine]"
+        self.body_node = body_node
+        self.arg_names = arg_names
+
+    def execute(self, args):
+        res = RTResult()
+        interpreter = Interpreter()
+        new_context = Context(self.name, self.context)
+        new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
+
+        if len(args) > len(self.arg_names):
+            return res.failure(RTError(
+                f"paduota per daug argumentu ({len(args) - len(self.arg_names)}) '{self.name}' funkcijai"
+            ))
+
+        if len(args) < len(self.arg_names):
+            return res.failure(RTError(
+                f"paduota per mazai argumentu ({len(self.arg_names) - len(args)}) '{self.name}' funkcijai"
+            ))
+
+        for i in range(len(args)):
+            arg_name = self.arg_names[i]
+            arg_value = args[i]
+            arg_value.set_context(new_context)
+            new_context.symbol_table.set(arg_name, arg_value)
+
+        value = res.register(interpreter.visit(self.body_node, new_context))
+        if res.error: return res
+        return res.success(value)
+
+    def copy(self):
+        copy = Function(self.name, self.body_node, self.arg_names)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f"funkcija '{self.name}'"
 
 class Context:
     def __init__(self, display_name, parent=None):
@@ -711,9 +991,9 @@ class Context:
 # simboliu class
 
 class SymbolTable:
-    def __init__(self):
+    def __init__(self, parent=None):
         self.symbols = {}
-        self.parent = None
+        self.parent = parent
 
     def get(self, name):
         value = self.symbols.get(name, None)
@@ -740,7 +1020,7 @@ class Interpreter:
 
     # metodai pagal tipus
     def visit_NumberNode(self, node, context):
-        return RTResult().success(Number(node.token.value))  # sukuriamas skaicius ir jis visados successful
+        return RTResult().success(Number(node.token.value).set_context(context))  # sukuriamas skaicius ir jis visados successful
 
     def visit_ValueAccessNode(self, node, context):
         res = RTResult()
@@ -887,6 +1167,34 @@ class Interpreter:
 
         return res.success(None)
 
+    def visit_FuncNode(self, node, context):
+        res = RTResult()
+
+        func_name = node.var_name_tok.value if node.var_name_tok else None
+        body_node = node.body_node
+        arg_names = [arg_name.value for arg_name in node.arg_name_toks]
+        func_value = Function(func_name, body_node, arg_names).set_context(context)
+
+        if node.var_name_tok:
+            context.symbol_table.set(func_name, func_value)
+
+        return res.success(func_value)
+
+    def visit_CallNode(self, node, context):
+        res = RTResult()
+        args = []
+
+        value_to_call = res.register(self.visit(node.node_to_call, context))
+        if res.error: return res
+        value_to_call = value_to_call.copy()
+
+        for arg_node in node.arg_nodes:
+            args.append(res.register(self.visit(arg_node, context)))
+            if res.error: return res
+
+        return_value = res.register(value_to_call.execute(args))
+        if res.error: return res
+        return res.success(return_value)
 
 global_symbol_table = SymbolTable()
 global_symbol_table.set("null", Number(0))
@@ -894,7 +1202,7 @@ global_symbol_table.set("true", Number(1))
 global_symbol_table.set("false", Number(0))
 
 
-# lexer'io paleidimui
+# paleidimui
 def run(text):
     lexer = Lexer(text)  # sukūriamas lexer'is su įvestu tekstu
     tokens, error = lexer.make_tokens()  # gaunami tokens ir klaida, jeigu ji yra (None jeigu jos nėra)
