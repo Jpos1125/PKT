@@ -8,6 +8,7 @@ from symtable import Symbol
 # Aprašomi tokens
 T_INT = 'INT'
 T_FLOAT = 'FLOAT'
+T_STRING = 'STRING'
 T_IDENTIFIER = 'IDENTIFIER'
 T_KEYWORD = 'KEYWORD'
 T_PLUS = 'PLUS'
@@ -109,6 +110,8 @@ class Lexer:
                 self.advance()
             elif self.current_char in LETTERS:  # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
                 tokens.append(self.make_identifier())
+            elif self.current_char == '"':
+                tokens.append(self.make_string())
             elif self.current_char == '+':  # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
                 playsound('sounds/1.mp3')
                 tokens.append(Token(T_PLUS))
@@ -179,6 +182,30 @@ class Lexer:
         else:  # jeigu suformuotame skaičiuje yra taškas, tai bus float
             return Token(T_FLOAT, float(number_string))
 
+    def make_string(self):
+        string = ''
+        escape_char = False
+        self.advance()
+
+        escape_chars = {
+            'n': '\n', # naujai eilutei
+            't': '\t' # tabuliacijai
+        }
+
+        while self.current_char != None and (self.current_char != '"' or escape_char): # bus einama iki sekančio '"', nebent į jį nėra žiūrima, kaip į simbolį, o tiesiog, kaip į tekstą
+            if escape_char:
+                string += escape_chars.get(self.current_char, self.current_char) # galimai naujai eilutei ar tabuliacijai
+            else:
+                if self.current_char == '\\': # simbolių neigimui
+                    escape_char = True
+                else:
+                    string += self.current_char
+            self.advance()
+            escape_char = False
+
+        self.advance()
+        return Token(T_STRING, string)
+
     def make_identifier(self):
         id_str = ''
 
@@ -248,6 +275,13 @@ class NumberNode:
     def __repr__(self):
         return f'{self.token}'
 
+class StringNode:
+    def __init__(self, token):
+        self.token = token
+
+    # metodas gražiam atspausdinimui
+    def __repr__(self):
+        return f'{self.token}'
 
 class ValueAccessNode:
     def __init__(self, value_name_tok):
@@ -377,7 +411,7 @@ class Parser:
             else:
                 arg_nodes.append(res.register(self.expression()))
                 if res.error:
-                    return res.fail(SyntaxError("Trūksta simbolio ')', value, if, for, while, func, int, float, identifier"))
+                    return res.fail(SyntaxError("Trūksta simbolio ')', value, if, for, while, func, int, float, identifikatoriaus"))
 
                 while self.current_token.type == T_COMMA:
                     res.register_advancement()
@@ -404,6 +438,11 @@ class Parser:
             result.register_advancement()
             self.advance()
             return result.success(NumberNode(token))
+
+        if token.type in (T_STRING):  # toliau jeigu token yra string
+            result.register_advancement()
+            self.advance()
+            return result.success(StringNode(token))
 
         elif token.type == T_IDENTIFIER:
             result.register_advancement()
@@ -547,7 +586,7 @@ class Parser:
         else_case = None
 
         if not self.current_token.matches(T_KEYWORD, 'if'):
-            failMes = f"Expected 'IF'"
+            failMes = f"Tikimasi 'if'"
             return res.fail(SyntaxError(failMes))
 
         res.register_advancement()
@@ -556,7 +595,7 @@ class Parser:
 
         if res.error: return res
         if not self.current_token.matches(T_KEYWORD, 'then'):
-            failMes = f"Expected 'then'"
+            failMes = f"Tikimasi 'then'"
             return res.fail(SyntaxError(
                 failMes
             ))
@@ -575,7 +614,7 @@ class Parser:
             if res.error: return res
 
             if not self.current_token.matches(T_KEYWORD, 'then'):
-                failMes = f"Expected 'then/elif'"
+                failMes = f"Tikimasi 'then/elif'"
                 return res.fail(failMes)
 
             res.register_advancement()
@@ -599,13 +638,13 @@ class Parser:
 
         if not self.current_token.matches(T_KEYWORD, 'for'):
             return res.fail(SyntaxError(
-                f"Expected 'FOR'"
+                f"Tikimasi 'for'"
             ))
         res.register_advancement()
         self.advance()
         if self.current_token.type != T_IDENTIFIER:
             return res.fail(SyntaxError(
-                f"Expected identifier"
+                f"Tikimasi identifikatoriaus"
             ))
         var_name = self.current_token
         res.register_advancement()
@@ -613,7 +652,7 @@ class Parser:
 
         if self.current_token.type != T_EQ:
             return res.fail(SyntaxError(
-                f"Expected '='"
+                f"Tikimasi '='"
             ))
         res.register_advancement()
         self.advance()
@@ -624,7 +663,7 @@ class Parser:
 
         if not self.current_token.matches(T_KEYWORD, 'to'):
             return res.fail(SyntaxError(
-                f"Expected 'TO'"
+                f"Tikimasi 'to'"
             ))
         res.register_advancement()
         self.advance()
@@ -640,7 +679,7 @@ class Parser:
             step_value = None
         if not self.current_token.matches(T_KEYWORD, 'then'):
             return res.fail(SyntaxError(
-                f"Expected'THEN'"
+                f"Tikimasi 'then'"
             ))
 
         res.register_advancement()
@@ -656,7 +695,7 @@ class Parser:
 
         if not self.current_token.matches(T_KEYWORD, 'func'):
             return res.fail(SyntaxError(
-                f"Expected'func'"
+                f"Tikimasi 'func'"
             ))
 
         res.register_advancement()
@@ -668,13 +707,13 @@ class Parser:
             self.advance()
             if self.current_token.type != T_OPARENTHESES:
                 return res.fail(SyntaxError(
-                    f"Expected'('"
+                    f"Tikimasi '('"
                 ))
         else:
             var_name_tok = None
             if self.current_token.type != T_OPARENTHESES:
                 return res.fail(SyntaxError(
-                    f"Tikimasi identifier arba '('"
+                    f"Tikimasi identifikatoriaus arba '('"
                 ))
 
         res.register_advancement()
@@ -692,7 +731,7 @@ class Parser:
 
                 if self.current_token.type != T_IDENTIFIER:
                     return res.fail(SyntaxError(
-                        f"Tikimasi identifier"
+                        f"Tikimasi identifikatoriaus"
                     ))
 
                 arg_name_toks.append(self.current_token)
@@ -706,7 +745,7 @@ class Parser:
         else:
             if self.current_token.type != T_CPARENTHESES:
                  return res.fail(SyntaxError(
-                    f"Tikimasi identifier arba ')'"
+                    f"Tikimasi identifikatoriaus arba ')'"
                 ))
 
         res.register_advancement()
@@ -734,7 +773,7 @@ class Parser:
 
         if not self.current_token.matches(T_KEYWORD, 'while'):
             return res.fail(SyntaxError(
-                f"Expected 'WHILE'"
+                f"Tikimasi 'while'"
             ))
         res.register_advancement()
         self.advance()
@@ -742,7 +781,7 @@ class Parser:
         if res.error: return res
         if not self.current_token.matches(T_KEYWORD, 'then'):
             return res.fail(SyntaxError(
-                f"Expected'THEN'"))
+                f"Tikimasi 'then'"))
         res.register_advancement()
         self.advance()
 
@@ -939,6 +978,33 @@ class Number(Value):
     def __repr__(self):
         return str(self.value)
 
+class String(Value):
+    def __init__(self, value):
+        super().__init__()
+        self.value = value
+
+    def added_to(self, other): # dviejų string sujungimui
+        if isinstance(other, String):
+            return String(self.value + other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+
+    def multed_by(self, other): # string pakartojimui
+        if isinstance(other, Number):
+            return String(self.value * other.value).set_context(self.context), None
+        else:
+            return None, Value.illegal_operation(self, other)
+
+    def is_true(self):
+        return len(self.value) > 0
+
+    def copy(self):
+        copy = String(self.value)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f'"{self.value}"'
 
 class Function(Value):
     def __init__(self, name, body_node, arg_names):
@@ -1021,6 +1087,9 @@ class Interpreter:
     # metodai pagal tipus
     def visit_NumberNode(self, node, context):
         return RTResult().success(Number(node.token.value).set_context(context))  # sukuriamas skaicius ir jis visados successful
+
+    def visit_StringNode(self, node, context):
+        return RTResult().success(String(node.token.value).set_context(context))
 
     def visit_ValueAccessNode(self, node, context):
         res = RTResult()
