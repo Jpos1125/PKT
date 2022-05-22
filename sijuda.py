@@ -2,6 +2,7 @@ from ast import Expression, keyword
 from importlib.util import set_loader
 
 import string
+import os
 from playsound import playsound
 from symtable import Symbol
 
@@ -118,9 +119,9 @@ class Lexer:
                 self.advance()
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
                 tokens.append(self.make_minus_or_arrow())
-              #  playsound('sounds/2.mp3')
-              #  tokens.append(Token(T_MINUS))
-              #  self.advance()
+            #  playsound('sounds/2.mp3')
+            #  tokens.append(Token(T_MINUS))
+            #  self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
                 playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
@@ -188,15 +189,17 @@ class Lexer:
         self.advance()
 
         escape_chars = {
-            'n': '\n', # naujai eilutei
-            't': '\t' # tabuliacijai
+            'n': '\n',  # naujai eilutei
+            't': '\t'  # tabuliacijai
         }
 
-        while self.current_char != None and (self.current_char != '"' or escape_char): # bus einama iki sekančio '"', nebent į jį nėra žiūrima, kaip į simbolį, o tiesiog, kaip į tekstą
+        while self.current_char != None and (
+                self.current_char != '"' or escape_char):  # bus einama iki sekančio '"', nebent į jį nėra žiūrima, kaip į simbolį, o tiesiog, kaip į tekstą
             if escape_char:
-                string += escape_chars.get(self.current_char, self.current_char) # galimai naujai eilutei ar tabuliacijai
+                string += escape_chars.get(self.current_char,
+                                           self.current_char)  # galimai naujai eilutei ar tabuliacijai
             else:
-                if self.current_char == '\\': # simbolių neigimui
+                if self.current_char == '\\':  # simbolių neigimui
                     escape_char = True
                 else:
                     string += self.current_char
@@ -222,7 +225,7 @@ class Lexer:
         tok_type = T_MINUS
         self.advance()
 
-        if self.current_char == '>': # jeigu po ženklo - seka ženklas >, sureaguojama, kad tai yra ->
+        if self.current_char == '>':  # jeigu po ženklo - seka ženklas >, sureaguojama, kad tai yra ->
             self.advance()
             tok_type = T_ARROW
 
@@ -275,6 +278,7 @@ class NumberNode:
     def __repr__(self):
         return f'{self.token}'
 
+
 class StringNode:
     def __init__(self, token):
         self.token = token
@@ -282,6 +286,7 @@ class StringNode:
     # metodas gražiam atspausdinimui
     def __repr__(self):
         return f'{self.token}'
+
 
 class ValueAccessNode:
     def __init__(self, value_name_tok):
@@ -338,16 +343,19 @@ class WhileNode:
         self.condition_node = condition_node
         self.body_node = body_node
 
+
 class FuncNode:
     def __init__(self, var_name_tok, arg_name_toks, body_node):
         self.var_name_tok = var_name_tok
         self.arg_name_toks = arg_name_toks
         self.body_node = body_node
 
+
 class CallNode:
     def __init__(self, node_to_call, arg_nodes):
         self.node_to_call = node_to_call
         self.arg_nodes = arg_nodes
+
 
 # klasė skirta patikrinti ar parser'io rezultatas neturi klaidų
 class ParseResult:
@@ -411,7 +419,8 @@ class Parser:
             else:
                 arg_nodes.append(res.register(self.expression()))
                 if res.error:
-                    return res.fail(SyntaxError("Trūksta simbolio ')', value, if, for, while, func, int, float, identifikatoriaus"))
+                    return res.fail(
+                        SyntaxError("Trūksta simbolio ')', value, if, for, while, func, int, float, identifikatoriaus"))
 
                 while self.current_token.type == T_COMMA:
                     res.register_advancement()
@@ -423,7 +432,7 @@ class Parser:
                 if self.current_token.type != T_CPARENTHESES:
                     return res.fail(
                         SyntaxError("Trūksta simbolio ',' ar ')'"
-                    ))
+                                    ))
 
                 res.register_advancement()
                 self.advance()
@@ -481,7 +490,8 @@ class Parser:
             if result.error: return result
             return result.success(func_def)
 
-        return result.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', '(', if, for, while arba func"))
+        return result.fail(
+            SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', '(', if, for, while arba func"))
 
     def power(self):
         return self.simple_operator(self.call, (T_POW,), self.factor)
@@ -556,7 +566,8 @@ class Parser:
 
         node = res.register(self.simple_operator(self.comp_expr, ((T_KEYWORD, "and"), (T_KEYWORD, "or"))))
         if res.error:
-            return res.fail(SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', '(', if, for, while arba func"))
+            return res.fail(
+                SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', '(', if, for, while arba func"))
         return res.success(node)
 
     # metodas dirbti su išsireiškimais, kaip 1 + 2 ar (1 + 2) * 3) pagal poreikį
@@ -744,7 +755,7 @@ class Parser:
                 ))
         else:
             if self.current_token.type != T_CPARENTHESES:
-                 return res.fail(SyntaxError(
+                return res.fail(SyntaxError(
                     f"Tikimasi identifikatoriaus arba ')'"
                 ))
 
@@ -809,6 +820,7 @@ class RTResult:
     def failure(self, error):
         self.error = error
         return self
+
 
 class Value:
     def __init__(self):
@@ -875,6 +887,7 @@ class Value:
             'Negalima operacija'
         )
 
+
 # Skaičių klasė ju laikymui ir operavimui su jais
 class Number(Value):
     def __init__(self, value):
@@ -882,7 +895,8 @@ class Number(Value):
 
     def added_to(self, other):  # gražina sudėties rezultata
         if isinstance(other, Number):  # jei reiksmė yra kitas skaičius
-            return Number(self.value + other.value).set_context(self.context), None  # None tai kad nera error atliekant operacija
+            return Number(self.value + other.value).set_context(
+                self.context), None  # None tai kad nera error atliekant operacija
         else:
             return None, Value.illegal_operation(self, other)
 
@@ -978,18 +992,24 @@ class Number(Value):
     def __repr__(self):
         return str(self.value)
 
+
+Number.null = 0
+Number.false = 0
+Number.true = 1
+
+
 class String(Value):
     def __init__(self, value):
         super().__init__()
         self.value = value
 
-    def added_to(self, other): # dviejų string sujungimui
+    def added_to(self, other):  # dviejų string sujungimui
         if isinstance(other, String):
             return String(self.value + other.value).set_context(self.context), None
         else:
             return None, Value.illegal_operation(self, other)
 
-    def multed_by(self, other): # string pakartojimui
+    def multed_by(self, other):  # string pakartojimui
         if isinstance(other, Number):
             return String(self.value * other.value).set_context(self.context), None
         else:
@@ -1006,34 +1026,59 @@ class String(Value):
     def __repr__(self):
         return f'"{self.value}"'
 
-class Function(Value):
-    def __init__(self, name, body_node, arg_names):
+
+class BaseFunction(Value):
+    def __init__(self, name):
         super().__init__()
         self.name = name or "[anonimine]"
+
+    def generate_new_context(self):
+        new_context = Context(self.name, self.context)
+        new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
+        return new_context
+
+    def check_args(self, arg_names, args):
+        res = RTResult
+
+        if len(args) > len(arg_names):
+            return res.failure(RTError(
+                f"paduota per daug argumentu ({len(args) - len(arg_names)}) '{self.name}' funkcijai"
+            ))
+
+        if len(args) < len(arg_names):
+            return res.failure(RTError(
+                f"paduota per mazai argumentu ({len(arg_names) - len(args)}) '{self.name}' funkcijai"
+            ))
+        return res.success(None)
+
+    def populate_args(self, arg_names, args, exec_ctx):
+        for i in range(len(args)):
+            arg_name = arg_names[i]
+            arg_value = args[i]
+            arg_value.set_context(exec_ctx)
+            exec_ctx.symbol_table.set(arg_name, arg_value)
+
+    def check_and_populate_args(self, arg_names, args, exec_ctx):
+        res = RTResult
+        res.register(self.check_args(arg_names, args))
+        if res.error: return res
+        self.populate_args(arg_names, args, exec_ctx)
+        return res.success(None)
+
+
+class Function(BaseFunction):
+    def __init__(self, name, body_node, arg_names):
+        super().__init__(name)
         self.body_node = body_node
         self.arg_names = arg_names
 
     def execute(self, args):
         res = RTResult()
         interpreter = Interpreter()
-        new_context = Context(self.name, self.context)
-        new_context.symbol_table = SymbolTable(new_context.parent.symbol_table)
+        new_context = self.generate_new_context()
 
-        if len(args) > len(self.arg_names):
-            return res.failure(RTError(
-                f"paduota per daug argumentu ({len(args) - len(self.arg_names)}) '{self.name}' funkcijai"
-            ))
-
-        if len(args) < len(self.arg_names):
-            return res.failure(RTError(
-                f"paduota per mazai argumentu ({len(self.arg_names) - len(args)}) '{self.name}' funkcijai"
-            ))
-
-        for i in range(len(args)):
-            arg_name = self.arg_names[i]
-            arg_value = args[i]
-            arg_value.set_context(new_context)
-            new_context.symbol_table.set(arg_name, arg_value)
+        res.register(self.check_and_populate_args(self.arg_names, args, new_context))
+        if res.error: return res
 
         value = res.register(interpreter.visit(self.body_node, new_context))
         if res.error: return res
@@ -1046,6 +1091,93 @@ class Function(Value):
 
     def __repr__(self):
         return f"funkcija '{self.name}'"
+
+
+class BuildInFunction(BaseFunction):
+    def __init__(self, name):
+        super().__init__(name)
+
+    def execute(self, args):
+        res = RTResult
+        exec_ctx = self.generate_new_context()
+
+        method_name = f'execute_{self.name}'
+        method = getattr(self, method_name, self.no_visit_method)
+
+        res.register(self.check_and_populate_args(method.arg_names, args, exec_ctx))
+        if res.error: return res
+
+        return_value = res.register(method(exec_ctx))
+        if res.error: return res
+
+        return res.success(return_value)
+
+    def no_visit_method(self, node, context):
+        raise Exception(f'{self.name} metodas neegzistuoja')
+
+    def execute_print(self, exec_ctx):
+        print(str(exec_ctx.symbol_table.get('value')))
+        return RTResult().success(Number.null)
+
+    execute_print.arg_names = ['value']
+
+    def execute_print_return(self, exec_ctx):
+        return RTResult().success(String(str(exec_ctx.symbol_table.get('value'))))
+
+    execute_print.arg_names = ['value']
+
+    def execute_input(self, exec_ctx):
+        text = input()
+        return RTResult().success(String(text))
+
+    execute_input.args_names = []
+
+    def execute_input_int(self, exec_ctx):
+        while True:
+            text = input()
+            try:
+                number = int(text)
+                break
+            except ValueError:
+                print(f"'{text}' privalo buti skaicius.")
+        return RTResult().success(Number(number))
+
+    execute_input.args_names = []
+
+    def execute_clear(self, exec_ctx):
+        os.system('cls' if os.name == 'nt' else 'clear')
+        return RTResult().success(Number.null)
+
+    execute_clear.arg_names = []
+
+    def execute_is_number(self, exec_ctx):
+        is_number = isinstance(exec_ctx.symbol_table.get("value"), Number)
+        return RTResult().success(Number.true if is_number else Number.false)
+
+    execute_is_number.arg_names = ['value']
+
+    def execute_is_string(self, exec_ctx):
+        is_number = isinstance(exec_ctx.symbol_table.get("value"), String)
+        return RTResult().success(Number.true if is_number else Number.false)
+
+    execute_is_number.arg_names = ['value']
+
+    def execute_is_function(self, exec_ctx):
+        is_number = isinstance(exec_ctx.symbol_table.get("value"), BaseFunction)
+        return RTResult().success(Number.true if is_number else Number.false)
+
+    execute_is_number.arg_names = ['value']
+
+
+BuildInFunction.print = BuildInFunction("print")
+BuildInFunction.print_ret = BuildInFunction("print_ret")
+BuildInFunction.input = BuildInFunction("input")
+BuildInFunction.input_int = BuildInFunction("input_int")
+BuildInFunction.clear = BuildInFunction("clear")
+BuildInFunction.is_number = BuildInFunction("is_number")
+BuildInFunction.is_string = BuildInFunction("is_string")
+BuildInFunction.is_function = BuildInFunction("is_function")
+
 
 class Context:
     def __init__(self, display_name, parent=None):
@@ -1086,7 +1218,8 @@ class Interpreter:
 
     # metodai pagal tipus
     def visit_NumberNode(self, node, context):
-        return RTResult().success(Number(node.token.value).set_context(context))  # sukuriamas skaicius ir jis visados successful
+        return RTResult().success(
+            Number(node.token.value).set_context(context))  # sukuriamas skaicius ir jis visados successful
 
     def visit_StringNode(self, node, context):
         return RTResult().success(String(node.token.value).set_context(context))
@@ -1265,10 +1398,21 @@ class Interpreter:
         if res.error: return res
         return res.success(return_value)
 
+
 global_symbol_table = SymbolTable()
-global_symbol_table.set("null", Number(0))
-global_symbol_table.set("true", Number(1))
-global_symbol_table.set("false", Number(0))
+global_symbol_table.set("null", Number.null)
+global_symbol_table.set("true", Number.true)
+global_symbol_table.set("false", Number.false)
+
+global_symbol_table.set("PRINT", BuildInFunction.print)
+global_symbol_table.set("PRINT_RET", BuildInFunction.print_ret)
+global_symbol_table.set("INPUT", BuildInFunction.input)
+global_symbol_table.set("INPUT_INT", BuildInFunction.input_int)
+global_symbol_table.set("CLEAR", BuildInFunction.clear)
+global_symbol_table.set("CLS", BuildInFunction.clear)
+global_symbol_table.set("IS_NUM", BuildInFunction.is_number)
+global_symbol_table.set("IS_STR", BuildInFunction.is_string)
+global_symbol_table.set("IS_FUN", BuildInFunction.is_function)
 
 
 # paleidimui
