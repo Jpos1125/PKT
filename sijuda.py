@@ -1023,6 +1023,9 @@ class String(Value):
         copy.set_context(self.context)
         return copy
 
+    def __str__(self):
+        return self.value
+
     def __repr__(self):
         return f'"{self.value}"'
 
@@ -1127,7 +1130,7 @@ class BuildInFunction(BaseFunction):
     def execute_input(self, exec_ctx):
         text = input()
         return RTResult().success(String(text))
-    execute_input.args_names = []
+    execute_input.arg_names = []
 
     def execute_input_int(self, exec_ctx):
         while True:
@@ -1138,7 +1141,7 @@ class BuildInFunction(BaseFunction):
             except ValueError:
                 print(f"'{text}' privalo buti skaicius.")
         return RTResult().success(Number(number))
-    execute_input.args_names = []
+    execute_input.arg_names = []
 
     def execute_clear(self, exec_ctx):
         os.system('cls' if os.name == 'nt' else 'clear')
