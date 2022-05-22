@@ -880,7 +880,7 @@ class Parser:
             body = res.register(self.statements())
             if res.error: return res
 
-            if not self.current_token.matches(T_KEYWORD, 'END'):
+            if not self.current_token.matches(T_KEYWORD, 'end'):
                 return res.fail(SyntaxError(
                 f"Expected 'END'"
                 ))
@@ -982,7 +982,7 @@ class Parser:
         body = res.register(self.statements())
         if res.error: return res
 
-        if not self.current_token.matches(T_KEYWORD, 'END'):
+        if not self.current_token.matches(T_KEYWORD, 'end'):
             return res.fail(SyntaxError(
             f"Expected 'END'"
         ))
@@ -1022,7 +1022,7 @@ class Parser:
             body = res.register(self.statements())
             if res.error: return res
 
-            if not self.current_token.matches(T_KEYWORD, 'END'):
+            if not self.current_token.matches(T_KEYWORD, 'end'):
                 return res.failure(SyntaxError(
                 f"Expected 'END'"
                 ))
