@@ -1038,7 +1038,7 @@ class BaseFunction(Value):
         return new_context
 
     def check_args(self, arg_names, args):
-        res = RTResult
+        res = RTResult()
 
         if len(args) > len(arg_names):
             return res.failure(RTError(
@@ -1059,7 +1059,7 @@ class BaseFunction(Value):
             exec_ctx.symbol_table.set(arg_name, arg_value)
 
     def check_and_populate_args(self, arg_names, args, exec_ctx):
-        res = RTResult
+        res = RTResult()
         res.register(self.check_args(arg_names, args))
         if res.error: return res
         self.populate_args(arg_names, args, exec_ctx)
@@ -1098,7 +1098,7 @@ class BuildInFunction(BaseFunction):
         super().__init__(name)
 
     def execute(self, args):
-        res = RTResult
+        res = RTResult()
         exec_ctx = self.generate_new_context()
 
         method_name = f'execute_{self.name}'
@@ -1118,18 +1118,15 @@ class BuildInFunction(BaseFunction):
     def execute_print(self, exec_ctx):
         print(str(exec_ctx.symbol_table.get('value')))
         return RTResult().success(Number.null)
-
     execute_print.arg_names = ['value']
 
     def execute_print_return(self, exec_ctx):
-        return RTResult().success(String(str(exec_ctx.symbol_table.get('value'))))
-
-    execute_print.arg_names = ['value']
+        return RTResult().success(String(str(exec_ctx.symbol_table.get("value"))))
+    execute_print.arg_names = ["value"]
 
     def execute_input(self, exec_ctx):
         text = input()
         return RTResult().success(String(text))
-
     execute_input.args_names = []
 
     def execute_input_int(self, exec_ctx):
@@ -1141,7 +1138,6 @@ class BuildInFunction(BaseFunction):
             except ValueError:
                 print(f"'{text}' privalo buti skaicius.")
         return RTResult().success(Number(number))
-
     execute_input.args_names = []
 
     def execute_clear(self, exec_ctx):
@@ -1154,19 +1150,27 @@ class BuildInFunction(BaseFunction):
         is_number = isinstance(exec_ctx.symbol_table.get("value"), Number)
         return RTResult().success(Number.true if is_number else Number.false)
 
-    execute_is_number.arg_names = ['value']
+    execute_is_number.arg_names = ["value"]
 
     def execute_is_string(self, exec_ctx):
         is_number = isinstance(exec_ctx.symbol_table.get("value"), String)
         return RTResult().success(Number.true if is_number else Number.false)
 
-    execute_is_number.arg_names = ['value']
+    execute_is_number.arg_names = ["value"]
 
     def execute_is_function(self, exec_ctx):
         is_number = isinstance(exec_ctx.symbol_table.get("value"), BaseFunction)
         return RTResult().success(Number.true if is_number else Number.false)
 
-    execute_is_number.arg_names = ['value']
+    execute_is_number.arg_names = ["value"]
+
+    def copy(self):
+        copy = BuildInFunction(self.name)
+        copy.set_context(self.context)
+        return copy
+
+    def __repr__(self):
+        return f"<build-in funkcija {self.name}>"
 
 
 BuildInFunction.print = BuildInFunction("print")
@@ -1233,6 +1237,7 @@ class Interpreter:
         if not value:
             return res.failure(RTError(f"'{value_name} nerastas"))
 
+        value = value.copy().set_context(context)
         return res.success(value)
 
     def visit_ValueAssignNode(self, node, context):
@@ -1396,6 +1401,8 @@ class Interpreter:
 
         return_value = res.register(value_to_call.execute(args))
         if res.error: return res
+        #CIA
+        #return_value = return_value.copy().set_context(context)
         return res.success(return_value)
 
 
