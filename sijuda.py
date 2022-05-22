@@ -1149,6 +1149,12 @@ class BuildInFunction(BaseFunction):
 
     execute_clear.arg_names = []
 
+    def execute_music(self,exec_ctx):
+        playsound('sounds/trollge.mp3')
+        return RTResult().success(Number.null)
+
+    execute_music.arg_names = []
+
     def execute_is_number(self, exec_ctx):
         is_number = isinstance(exec_ctx.symbol_table.get("value"), Number)
         return RTResult().success(Number.true if is_number else Number.false)
@@ -1184,6 +1190,7 @@ BuildInFunction.clear = BuildInFunction("clear")
 BuildInFunction.is_number = BuildInFunction("is_number")
 BuildInFunction.is_string = BuildInFunction("is_string")
 BuildInFunction.is_function = BuildInFunction("is_function")
+BuildInFunction.music = BuildInFunction("music")
 
 
 class Context:
@@ -1415,14 +1422,12 @@ global_symbol_table.set("true", Number.true)
 global_symbol_table.set("false", Number.false)
 
 global_symbol_table.set("PRINT", BuildInFunction.print)
-global_symbol_table.set("PRINT_RET", BuildInFunction.print_ret)
 global_symbol_table.set("INPUT", BuildInFunction.input)
-global_symbol_table.set("INPUT_INT", BuildInFunction.input_int)
 global_symbol_table.set("CLEAR", BuildInFunction.clear)
-global_symbol_table.set("CLS", BuildInFunction.clear)
 global_symbol_table.set("IS_NUM", BuildInFunction.is_number)
 global_symbol_table.set("IS_STR", BuildInFunction.is_string)
 global_symbol_table.set("IS_FUN", BuildInFunction.is_function)
+global_symbol_table.set("MUSIC", BuildInFunction.music)
 
 
 # paleidimui
