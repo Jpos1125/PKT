@@ -19,11 +19,11 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "last_opened_file_path": "C:/Mokslai/Git/Kalbos projektas/PKT"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;last_opened_file_path&quot;: &quot;C:/Mokslai/Git/Kalbos projektas/PKT&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager" selected="Python.shell">
     <configuration name="shell" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
       <module name="PKT" />

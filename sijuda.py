@@ -126,9 +126,9 @@ class Lexer:
                 self.advance()
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
                 tokens.append(self.make_minus_or_arrow())
-            #  playsound('sounds/2.mp3')
-            #  tokens.append(Token(T_MINUS))
-            #  self.advance()
+                playsound('sounds/10.mp3')
+                #tokens.append(Token(T_MINUS))
+                #self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
                 playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
@@ -147,6 +147,7 @@ class Lexer:
                 tokens.append(Token(T_COMMA))
                 self.advance()
             elif self.current_char == '^':  # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
+                playsound('sounds/4.mp3')
                 tokens.append(Token(T_POW))
                 self.advance()
             elif self.current_char == '(':  # jeigu simbolis yra (, į tokens[] pridedamas naujas token T_OPARENTHESES
@@ -367,6 +368,7 @@ class WhileNode:
 
 class FuncNode:
     def __init__(self, var_name_tok, arg_name_toks, body_node, should_return_null):
+        playsound('sounds/6.mp3')
         self.var_name_tok = var_name_tok
         self.arg_name_toks = arg_name_toks
         self.body_node = body_node
@@ -1411,6 +1413,7 @@ class BuildInFunction(BaseFunction):
         raise Exception(f'{self.name} metodas neegzistuoja')
 
     def execute_print(self, exec_ctx):
+        playsound('sounds/8.mp3')
         print(str(exec_ctx.symbol_table.get('value')))
         return RTResult().success(Number.null)
     execute_print.arg_names = ['value']
