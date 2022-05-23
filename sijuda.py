@@ -189,11 +189,13 @@ class Lexer:
                     dot_cnt += 1  # sekamas taškų skaičius
                     number_string += '.'  # prie formuojamo skaičiaus pridedamas taškas
             else:  # jeigu simbolis yra intervale 0-9
-                frequency = 250 * int(self.current_char)  # Set Frequency To 2500 Hertz
-                duration = 100  # Set Duration To 1000 ms == 1 second
-                winsound.Beep(frequency, duration)
                 number_string += self.current_char  # formuojamas skaičius
             self.advance()
+            
+        frequency = 50 * int(number_string)  # Set Frequency To 2500 Hertz
+        duration = 100  # Set Duration To 1000 ms == 1 second
+        winsound.Beep(frequency, duration)
+        
 
         if dot_cnt == 0:  # jeigu suformuotame skaičiuje nėra taškų, tai bus int
             return Token(T_INT, int(number_string))
