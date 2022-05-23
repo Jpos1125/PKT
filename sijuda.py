@@ -4,7 +4,7 @@ from pickle import TRUE
 
 import string
 import os
-from playsound import playsound
+import winsound
 from symtable import Symbol
 
 # Aprašomi tokens
@@ -123,20 +123,16 @@ class Lexer:
             elif self.current_char == '"':
                 tokens.append(self.make_string())
             elif self.current_char == '+':  # jeigu simbolis yra +, į tokens[] pridedamas naujas token T_PLUS
-                playsound('sounds/1.mp3')
                 tokens.append(Token(T_PLUS))
                 self.advance()
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
                 tokens.append(self.make_minus_or_arrow())
-                playsound('sounds/10.mp3')
                 # tokens.append(Token(T_MINUS))
                 # self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
-                playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
                 self.advance()
             elif self.current_char == '/':  # jeigu simbolis yra /, į tokens[] pridedamas naujas token T_DIV
-                playsound('sounds/4.mp3')
                 tokens.append(Token(T_DIV))
                 self.advance()
             elif self.current_char == '[':
@@ -149,7 +145,6 @@ class Lexer:
                 tokens.append(Token(T_COMMA))
                 self.advance()
             elif self.current_char == '^':  # jeigu simbolis yra ^, į tokens[] pridedamas naujas token T_POW
-                playsound('sounds/4.mp3')
                 tokens.append(Token(T_POW))
                 self.advance()
             elif self.current_char == '(':  # jeigu simbolis yra (, į tokens[] pridedamas naujas token T_OPARENTHESES
@@ -159,6 +154,9 @@ class Lexer:
                 tokens.append(Token(T_CPARENTHESES))
                 self.advance()
             elif self.current_char in NUMBERS:  # jeigu simbolis yra 0-9, formuojamas skaičius (int arba float)
+                frequency = 250 * int(self.current_char)  # Set Frequency To 2500 Hertz
+                duration = 100  # Set Duration To 1000 ms == 1 second
+                winsound.Beep(frequency, duration)
                 tokens.append(self.make_number())
             elif self.current_char == '!':
                 tok, error = self.make_not_equals()  # patikrins ar po ! yra = zenklas jei taip, no error
@@ -1586,7 +1584,6 @@ class BuildInFunction(BaseFunction):
         raise Exception(f'{self.name} metodas neegzistuoja')
 
     def execute_print(self, exec_ctx):
-        playsound('sounds/8.mp3')
         print(str(exec_ctx.symbol_table.get('value')))
         return RTResult().success(Number.null)
 
@@ -1622,7 +1619,6 @@ class BuildInFunction(BaseFunction):
     execute_clear.arg_names = []
 
     def execute_music(self, exec_ctx):
-        playsound('sounds/trollge.mp3')
         return RTResult().success(Number.null)
 
     execute_music.arg_names = []
@@ -1875,7 +1871,6 @@ class Interpreter:
         else:
             condition = lambda: i > end_value.value
         while condition():
-            playsound('sounds/3.mp3')
             context.symbol_table.set(node.var_name_tok.value, Number(i))
             i += step_value.value
 
@@ -1898,7 +1893,6 @@ class Interpreter:
         elements = []
 
         while True:
-            playsound('sounds/3.mp3')
             condition = res.register(self.visit(node.condition_node, context))
             if res.error: return res
 
