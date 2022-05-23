@@ -192,8 +192,10 @@ class Lexer:
                 number_string += self.current_char  # formuojamas skaičius
             self.advance()
             
-        frequency = 50 * int(number_string)  # Set Frequency To 2500 Hertz
+        frequency = 120 * int(number_string)  # Set Frequency To 2500 Hertz
         duration = 100  # Set Duration To 1000 ms == 1 second
+        if frequency > 32767:
+            frequency = 32767
         winsound.Beep(frequency, duration)
         
 
