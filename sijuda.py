@@ -24,8 +24,8 @@ T_LT = 'LT'
 T_GT = 'GT'
 T_LTE = 'LTE'
 T_GTE = 'GTE'
-T_LSQUARE    = 'LSQUARE'
-T_RSQUARE    = 'RSQUARE'
+T_LSQUARE = 'LSQUARE'
+T_RSQUARE = 'RSQUARE'
 T_OPARENTHESES = 'OPARENTHESES'
 T_CPARENTHESES = 'CPARENTHESES'
 T_COMMA = 'COMMA'
@@ -34,7 +34,9 @@ T_END = 'END'
 T_COMMA = 'COMMA'
 T_ARROW = 'ARROW'
 
-KEYWORDS = ['value', 'and', 'or', 'not', 'if', 'then', 'elif', 'else', 'for', 'to', 'step', 'while', 'func', 'end']
+KEYWORDS = ['value', 'and', 'or', 'not', 'if', 'then', 'elif', 'else', 'for', 'to', 'step', 'while', 'func', 'end',   'RETURN',
+  'CONTINUE',
+  'BREAK',]
 NUMBERS = '0123456789'  # naudojama aptikti skaičius, jog galima būtų juos paversti į tokens
 LETTERS = string.ascii_letters
 LETTERS_NUMBERS = LETTERS + NUMBERS
@@ -94,7 +96,8 @@ class RTError(Error):
 
 # Lexer klasė, skirta viską suskaidyti į tokens (pvz. 1 + 2 būtų suskaldytą į trys tokens: token(int, 1), token(plus, +) ir token(int, 2)
 class Lexer:
-    def __init__(self, text):
+    def __init__(self, fn, text):
+        self.fn = fn
         self.text = text
         self.pos = -1  # sekama simbolio pozicija
         self.current_char = None  # simbolis, kuris dabar tikrinamas
@@ -127,8 +130,8 @@ class Lexer:
             elif self.current_char == '-':  # jeigu simbolis yra -, į tokens[] pridedamas naujas token T_MINUS
                 tokens.append(self.make_minus_or_arrow())
                 playsound('sounds/10.mp3')
-                #tokens.append(Token(T_MINUS))
-                #self.advance()
+                # tokens.append(Token(T_MINUS))
+                # self.advance()
             elif self.current_char == '*':  # jeigu simbolis yra *, į tokens[] pridedamas naujas token T_MUL
                 playsound('sounds/3.mp3')
                 tokens.append(Token(T_MUL))
@@ -295,9 +298,10 @@ class NumberNode:
     def __repr__(self):
         return f'{self.token}'
 
+
 class ListNode:
-  def __init__(self, element_nodes):
-    self.element_nodes = element_nodes
+    def __init__(self, element_nodes):
+        self.element_nodes = element_nodes
 
 
 class StringNode:
@@ -367,6 +371,22 @@ class WhileNode:
         self.should_return_null = should_return_null
 
 class FuncNode:
+  def __init__(self, var_name_tok, arg_name_toks, body_node, should_auto_return):
+    self.var_name_tok = var_name_tok
+    self.arg_name_toks = arg_name_toks
+    self.body_node = body_node
+    self.should_auto_return = should_auto_return
+
+    if self.var_name_tok:
+      self.pos_start = self.var_name_tok.pos_start
+    elif len(self.arg_name_toks) > 0:
+      self.pos_start = self.arg_name_toks[0].pos_start
+    else:
+      self.pos_start = self.body_node.pos_start
+
+    self.pos_end = self.body_node.pos_end
+
+class FuncNode:
     def __init__(self, var_name_tok, arg_name_toks, body_node, should_return_null):
         playsound('sounds/6.mp3')
         self.var_name_tok = var_name_tok
@@ -380,6 +400,19 @@ class CallNode:
         self.node_to_call = node_to_call
         self.arg_nodes = arg_nodes
 
+class ReturnNode:
+  def __init__(self, node_to_return, pos_start, pos_end):
+    self.node_to_return = node_to_return
+
+class ContinueNode:
+  def __init__(self, pos_start, pos_end):
+    self.pos_start = pos_start
+    self.pos_end = pos_end
+
+class BreakNode:
+  def __init__(self, pos_start, pos_end):
+    self.pos_start = pos_start
+    self.pos_end = pos_end
 
 # klasė skirta patikrinti ar parser'io rezultatas neturi klaidų
 class ParseResult:
@@ -401,7 +434,7 @@ class ParseResult:
     def success(self, node):
         self.node = node
         return self
-    
+
     def try_register(self, res):
         if res.error:
             self.to_reverse_count = res.advance_count
@@ -426,15 +459,14 @@ class Parser:
         self.update_current_tok()
         return self.current_token
 
-    def reverse(self, amount = 1):
+    def reverse(self, amount=1):
         self.token_index -= amount
         self.update_current_tok()
         return self.current_token
-    
+
     def update_current_tok(self):
         if self.token_index >= 0 and self.token_index < len(self.tokens):
             self.current_token = self.tokens[self.token_index]
-
 
     def parse(self):
         result = self.statements()
@@ -538,15 +570,14 @@ class Parser:
         return result.fail(
             SyntaxError("Tikimasi int, float, identifikatoriaus, '+', '-', '(', if, for, while arba func"))
 
-    
     def list_expr(self):
         res = ParseResult()
         element_nodes = []
 
         if self.current_token.type != T_LSQUARE:
             return res.fail(SyntaxError(
-                 f"Expected '['"
-        ))
+                f"Expected '['"
+            ))
 
         res.register_advancement()
         self.advance()
@@ -558,8 +589,8 @@ class Parser:
             element_nodes.append(res.register(self.expression()))
             if res.error:
                 return res.fail(SyntaxError(
-             "Expected ']', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
-            ))
+                    "Expected ']', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
+                ))
 
             while self.current_token.type == T_COMMA:
                 res.register_advancement()
@@ -570,8 +601,8 @@ class Parser:
 
             if self.current_token.type != T_RSQUARE:
                 return res.failure(SyntaxError(
-            f"Expected ',' or ']'"
-            ))
+                    f"Expected ',' or ']'"
+                ))
 
             res.register_advancement()
             self.advance()
@@ -627,14 +658,14 @@ class Parser:
 
     def statements(self):
         res = ParseResult()
-        statements = [] # list of expressions
+        statements = []  # list of expressions
 
-        #skip new lines
+        # skip new lines
         while self.current_token.type == T_NEWLINE:
             res.register_advancement()
             self.advance()
-        
-        statement = res.register(self.expression())
+
+        statement = res.register(self.statement())
         if res.error: return res
         statements.append(statement)
 
@@ -648,20 +679,46 @@ class Parser:
                 newline_count += 1
             if newline_count == 0:
                 more_statements = False
-            
+
             if not more_statements: break
-            statement = res.try_register(self.expression())
+            statement = res.try_register(self.statement())
             if not statement:
                 self.reverse(res.to_reverse_count)
                 more_statements = False
                 continue
-            #statement found
+            # statement found
             statements.append(statement)
 
         return res.success(ListNode(statements))
 
+    def statement(self):
+        res = ParseResult()
 
+        if self.current_token.matches(T_KEYWORD, 'RETURN'):
+            res.register_advancement()
+            self.advance()
 
+            expr = res.try_register(self.expression())
+            if not expr:
+                self.reverse(res.to_reverse_count)
+            return res.success(ReturnNode(expr, self.current_token.copy()))
+
+        if self.current_token.matches(T_KEYWORD, 'CONTINUE'):
+            res.register_advancement()
+            self.advance()
+            return res.success(ContinueNode(self.current_token.copy()))
+
+        if self.current_token.matches(T_KEYWORD, 'BREAK'):
+            res.register_advancement()
+            self.advance()
+            return res.success(BreakNode(self.current_token.copy()))
+
+        expr = res.register(self.expression())
+        if res.error:
+            return res.fail(SyntaxError(
+                "Expected 'RETURN', 'CONTINUE', 'BREAK', 'VAR', 'IF', 'FOR', 'WHILE', 'FUN', int, float, identifier, '+', '-', '(', '[' or 'NOT'"
+            ))
+        return res.success(expr)
 
     # metodas dirbti su išsireiškimais, turinčiais sudėtį ar atimtį
     def expression(self):
@@ -694,6 +751,107 @@ class Parser:
             return res.fail(
                 SyntaxError("Tikimasi int, float, identifikatoriaus, 'value' '+', '-', '(', if, for, while arba func"))
         return res.success(node)
+
+    def func_def(self):
+        res = ParseResult()
+
+        if not self.current_token.matches(T_KEYWORD, 'func'):
+            return res.fail(SyntaxError(
+                f"Expected 'func'"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        if self.current_token.type == T_IDENTIFIER:
+            var_name_tok = self.current_token
+            res.register_advancement()
+            self.advance()
+            if self.current_token.type != T_OPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Expected '('"
+                ))
+        else:
+            var_name_tok = None
+            if self.current_token.type != T_OPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Expected identifier or '('"
+                ))
+
+        res.register_advancement()
+        self.advance()
+        arg_name_toks = []
+
+        if self.current_token.type == T_IDENTIFIER:
+            arg_name_toks.append(self.current_token)
+            res.register_advancement()
+            self.advance()
+
+            while self.current_token.type == T_COMMA:
+                res.register_advancement()
+                self.advance()
+
+                if self.current_token.type != T_IDENTIFIER:
+                    return res.fail(SyntaxError(
+                        f"Expected identifier"
+                    ))
+
+                arg_name_toks.append(self.current_token)
+                res.register_advancement()
+                self.advance()
+
+            if self.current_token.type != T_CPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Expected ',' or ')'"
+                ))
+        else:
+            if self.current_token.type != T_CPARENTHESES:
+                return res.fail(SyntaxError(
+                    f"Expected identifier or ')'"
+                ))
+
+        res.register_advancement()
+        self.advance()
+
+        if self.current_token.type == T_ARROW:
+            res.register_advancement()
+            self.advance()
+
+            body = res.register(self.expression())
+            if res.error: return res
+
+            return res.success(FuncNode(
+                var_name_tok,
+                arg_name_toks,
+                body,
+                True
+            ))
+
+        if self.current_token.type != T_NEWLINE:
+            return res.fail(SyntaxError(
+                f"Expected '->' or NEWLINE"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        body = res.register(self.statements())
+        if res.error: return res
+
+        if not self.current_token.matches(T_KEYWORD, 'END'):
+            return res.fail(SyntaxError(
+                f"Expected 'END'"
+            ))
+
+        res.register_advancement()
+        self.advance()
+
+        return res.success(FuncNode(
+            var_name_tok,
+            arg_name_toks,
+            body,
+            False
+        ))
 
     # metodas dirbti su išsireiškimais, kaip 1 + 2 ar (1 + 2) * 3) pagal poreikį
     def simple_operator(self, func_a, operators,
@@ -747,7 +905,7 @@ class Parser:
                     self.advance()
                 else:
                     return res.fail(SyntaxError(
-                    "Expected 'end'"
+                        "Expected 'end'"
                     ))
             else:
                 expr = res.register(self.expression())
@@ -761,14 +919,13 @@ class Parser:
         cases, else_case = [], None
 
         if self.current_token.matches(T_KEYWORD, 'elif'):
-            all_cases = res.register(self.if_expr_b()) # b yra elif
+            all_cases = res.register(self.if_expr_b())  # b yra elif
             if res.error: return res
             cases, else_case = all_cases
         else:
-            else_case = res.register(self.if_expr_c()) # c yra else
-            if res.error: return res  
+            else_case = res.register(self.if_expr_c())  # c yra else
+            if res.error: return res
         return res.success((cases, else_case))
-
 
     def if_expr_cases(self, case_keyword):
         res = ParseResult()
@@ -798,18 +955,18 @@ class Parser:
 
             statements = res.register(self.statements())
             if res.error: return res
-            cases.append((condition, statements, True)) # appendinama i cases list'a
+            cases.append((condition, statements, True))  # appendinama i cases list'a
 
             if self.current_token.matches(T_KEYWORD, 'end'):
                 res.register_advancement()
                 self.advance()
             else:
-                all_cases = res.register(self.if_expr_b_or_c()) 
+                all_cases = res.register(self.if_expr_b_or_c())
                 if res.error: return res
                 new_cases, else_case = all_cases
                 cases.extend(new_cases)
         else:
-            expr = res.register(self.expression())
+            expr = res.register(self.statement())
             if res.error: return res
             cases.append((condition, expr, False))
 
@@ -819,7 +976,6 @@ class Parser:
             cases.extend(new_cases)
 
         return res.success((cases, else_case))
-
 
     def for_expr(self):
         res = ParseResult()
@@ -880,9 +1036,9 @@ class Parser:
             body = res.register(self.statements())
             if res.error: return res
 
-            if not self.current_token.matches(T_KEYWORD, 'END'):
+            if not self.current_token.matches(T_KEYWORD, 'end'):
                 return res.fail(SyntaxError(
-                f"Expected 'END'"
+                    f"Expected 'END'"
                 ))
 
             res.register_advancement()
@@ -890,9 +1046,7 @@ class Parser:
 
             return res.success(ForNode(var_name, start_value, end_value, step_value, body, True))
 
-
-
-        body = res.register(self.expression())
+        body = res.register(self.statement())
         if res.error: return res
 
         return res.success(ForNode(var_name, start_value, end_value, step_value, body, False))
@@ -970,10 +1124,10 @@ class Parser:
                 node_to_return,
                 False
             ))
-        
+
         if self.current_token.type != T_NEWLINE:
             return res.fail(SyntaxError(
-            f"Expected '->' or NEWLINE"
+                f"Expected '->' or NEWLINE"
             ))
 
         res.register_advancement()
@@ -982,21 +1136,20 @@ class Parser:
         body = res.register(self.statements())
         if res.error: return res
 
-        if not self.current_token.matches(T_KEYWORD, 'END'):
+        if not self.current_token.matches(T_KEYWORD, 'end'):
             return res.fail(SyntaxError(
-            f"Expected 'END'"
-        ))
+                f"Expected 'END'"
+            ))
 
         res.register_advancement()
         self.advance()
-    
+
         return res.success(FuncNode(
             var_name_tok,
             arg_name_toks,
             body,
             True
         ))
-        
 
     def while_expr(self):
         res = ParseResult()
@@ -1022,9 +1175,9 @@ class Parser:
             body = res.register(self.statements())
             if res.error: return res
 
-            if not self.current_token.matches(T_KEYWORD, 'END'):
+            if not self.current_token.matches(T_KEYWORD, 'end'):
                 return res.failure(SyntaxError(
-                f"Expected 'END'"
+                    f"Expected 'END'"
                 ))
 
             res.register_advancement()
@@ -1041,21 +1194,55 @@ class Parser:
 # klasė run time errorams
 class RTResult:
     def __init__(self):
+        self.reset()
+
+    def reset(self):
         self.value = None
         self.error = None
+        self.func_return_value = None
+        self.loop_should_continue = False
+        self.loop_should_break = False
 
     def register(self, res):
-        if res.error:
-            self.error = res.error
+        self.error = res.error
+        self.func_return_value = res.func_return_value
+        self.loop_should_continue = res.loop_should_continue
+        self.loop_should_break = res.loop_should_break
         return res.value
 
     def success(self, value):
+        self.reset()
         self.value = value
         return self
 
+    def success_return(self, value):
+        self.reset()
+        self.func_return_value = value
+        return self
+
+    def success_continue(self):
+        self.reset()
+        self.loop_should_continue = True
+        return self
+
+    def success_break(self):
+        self.reset()
+        self.loop_should_break = True
+        return self
+
     def failure(self, error):
+        self.reset()
         self.error = error
         return self
+
+    def should_return(self):
+        # Note: this will allow you to continue and break outside the current function
+        return (
+                self.error or
+                self.func_return_value or
+                self.loop_should_continue or
+                self.loop_should_break
+        )
 
 
 class Value:
@@ -1299,9 +1486,10 @@ class BaseFunction(Value):
     def check_and_populate_args(self, arg_names, args, exec_ctx):
         res = RTResult()
         res.register(self.check_args(arg_names, args))
-        if res.error: return res
+        if res.should_return(): return res
         self.populate_args(arg_names, args, exec_ctx)
         return res.success(None)
+
 
 class List(Value):
 
@@ -1322,10 +1510,10 @@ class List(Value):
                 return new_list, None
             except:
                 return None, RTError(
-                other.pos_start, other.pos_end,
-                'Element at this index could not be removed from list because index is out of bounds',
-                self.context
-            )
+                    other.pos_start, other.pos_end,
+                    'Element at this index could not be removed from list because index is out of bounds',
+                    self.context
+                )
         else:
             return None, Value.illegal_operation(self, other)
 
@@ -1343,13 +1531,13 @@ class List(Value):
                 return self.elements[other.value], None
             except:
                 return None, RTError(
-                other.pos_start, other.pos_end,
-                'Element at this index could not be retrieved from list because index is out of bounds',
-                self.context
-            )
+                    other.pos_start, other.pos_end,
+                    'Element at this index could not be retrieved from list because index is out of bounds',
+                    self.context
+                )
         else:
             return None, Value.illegal_operation(self, other)
-  
+
     def copy(self):
         copy = List(self.elements)
         copy.set_pos(self.pos_start, self.pos_end)
@@ -1361,6 +1549,7 @@ class List(Value):
 
     def __repr__(self):
         return f'[{", ".join([repr(x) for x in self.elements])}]'
+
 
 class Function(BaseFunction):
     def __init__(self, name, body_node, arg_names, should_return_null):
@@ -1375,11 +1564,13 @@ class Function(BaseFunction):
         new_context = self.generate_new_context()
 
         res.register(self.check_and_populate_args(self.arg_names, args, new_context))
-        if res.error: return res
+        if res.should_return(): return res
 
         value = res.register(interpreter.visit(self.body_node, new_context))
-        if res.error: return res
-        return res.success(Number.null if self.should_return_null else value)
+        if res.should_return() and res.func_return_value == None: return res
+
+        ret_value = (value if self.should_return_null else None) or res.func_return_value or Number.null
+        return res.success(ret_value)
 
     def copy(self):
         copy = Function(self.name, self.body_node, self.arg_names, self.should_return_null)
@@ -1416,15 +1607,18 @@ class BuildInFunction(BaseFunction):
         playsound('sounds/8.mp3')
         print(str(exec_ctx.symbol_table.get('value')))
         return RTResult().success(Number.null)
+
     execute_print.arg_names = ['value']
 
     def execute_print_return(self, exec_ctx):
         return RTResult().success(String(str(exec_ctx.symbol_table.get("value"))))
+
     execute_print.arg_names = ["value"]
 
     def execute_input(self, exec_ctx):
         text = input()
         return RTResult().success(String(text))
+
     execute_input.arg_names = []
 
     def execute_input_int(self, exec_ctx):
@@ -1436,6 +1630,7 @@ class BuildInFunction(BaseFunction):
             except ValueError:
                 print(f"'{text}' privalo buti skaicius.")
         return RTResult().success(Number(number))
+
     execute_input.arg_names = []
 
     def execute_clear(self, exec_ctx):
@@ -1444,7 +1639,7 @@ class BuildInFunction(BaseFunction):
 
     execute_clear.arg_names = []
 
-    def execute_music(self,exec_ctx):
+    def execute_music(self, exec_ctx):
         playsound('sounds/trollge.mp3')
         return RTResult().success(Number.null)
 
@@ -1473,6 +1668,32 @@ class BuildInFunction(BaseFunction):
         copy.set_context(self.context)
         return copy
 
+    def execute_run(self, exec_ctx):
+        fn = exec_ctx.symbol_table.get("fn")
+
+        if not isinstance(fn, String):
+            return RTResult().failure(RTError("Argumentas turi buti string", exec_ctx))
+
+        fn = fn.value
+
+        try:
+            with open(fn, "r") as f:
+                script = f.read()
+        except Exception as e:
+            return RTResult().failure(RTError("Nepavyko uzkrauti skripto \"{fn}\"\n" + str(e), exec_ctx))
+
+        _, error = run(fn, script)
+
+        if error:
+            return RTResult().failure(RTError(
+                f"Failed to finish executing script \"{fn}\"\n" +
+                error.to_string(),
+            ))
+
+        return RTResult().success(Number.null)
+
+    execute_run.arg_names = ["fn"]
+
     def __repr__(self):
         return f"<build-in funkcija {self.name}>"
 
@@ -1486,6 +1707,7 @@ BuildInFunction.is_number = BuildInFunction("is_number")
 BuildInFunction.is_string = BuildInFunction("is_string")
 BuildInFunction.is_function = BuildInFunction("is_function")
 BuildInFunction.music = BuildInFunction("music")
+BuildInFunction.run = BuildInFunction("run")
 
 
 class Context:
@@ -1542,8 +1764,8 @@ class Interpreter:
             if res.error: return res
 
         return res.success(
-        List(elements).set_context(context)
-    )
+            List(elements).set_context(context)
+        )
 
     def visit_ValueAccessNode(self, node, context):
         res = RTResult()
@@ -1673,11 +1895,19 @@ class Interpreter:
             context.symbol_table.set(node.var_name_tok.value, Number(i))
             i += step_value.value
 
-            elements.append(res.register(self.visit(node.body_node, context)))
-            if res.error: return res
+            value = res.register(self.visit(node.body_node, context))
+            if res.should_return() and res.loop_should_continue == False and res.loop_should_break == False: return res
 
-        return res.success(Number.null if node.should_return_null else 
-        List(elements).set_context(context))
+            if res.loop_should_continue:
+                continue
+
+            if res.loop_should_break:
+                break
+
+            elements.append(value)
+
+        return res.success(Number.null if node.should_return_null else
+                           List(elements).set_context(context))
 
     def visit_WhileNode(self, node, context):
         res = RTResult()
@@ -1690,11 +1920,19 @@ class Interpreter:
 
             if not condition.is_true(): break
 
-            elements.append(res.register(self.visit(node.body_node, context)))
-            if res.error: return res
+            value = res.register(self.visit(node.body_node, context))
+            if res.error and res.loop_should_continue == False and res.loop_should_break == False: return res
 
-        return res.success(Number.null if node.should_return_null else 
-        List(elements).set_context(context))
+            if res.loop_should_continue:
+                continue
+
+            if res.loop_should_break:
+                break
+
+            elements.append(value)
+
+        return res.success(Number.null if node.should_return_null else
+                           List(elements).set_context(context))
 
     def visit_FuncNode(self, node, context):
         res = RTResult()
@@ -1723,9 +1961,26 @@ class Interpreter:
 
         return_value = res.register(value_to_call.execute(args))
         if res.error: return res
-        #CIA
-        #return_value = return_value.copy().set_context(context)
+        # CIA
+        # return_value = return_value.copy().set_context(context)
         return res.success(return_value)
+
+    def visit_ReturnNode(self, node, context):
+        res = RTResult()
+
+        if node.node_to_return:
+            value = res.register(self.visit(node.node_to_return, context))
+            if res.should_return(): return res
+        else:
+            value = Number.null
+
+        return res.success_return(value)
+
+    def visit_ContinueNode(self, node, context):
+        return RTResult().success_continue()
+
+    def visit_BreakNode(self, node, context):
+        return RTResult().success_break()
 
 
 global_symbol_table = SymbolTable()
@@ -1740,11 +1995,12 @@ global_symbol_table.set("IS_NUM", BuildInFunction.is_number)
 global_symbol_table.set("IS_STR", BuildInFunction.is_string)
 global_symbol_table.set("IS_FUN", BuildInFunction.is_function)
 global_symbol_table.set("MUSIC", BuildInFunction.music)
+global_symbol_table.set("run", BuildInFunction.run)
 
 
 # paleidimui
-def run(text):
-    lexer = Lexer(text)  # sukūriamas lexer'is su įvestu tekstu
+def run(fn, text):
+    lexer = Lexer(fn, text)  # sukūriamas lexer'is su įvestu tekstu
     tokens, error = lexer.make_tokens()  # gaunami tokens ir klaida, jeigu ji yra (None jeigu jos nėra)
     if error:
         return None, error

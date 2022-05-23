@@ -1,9 +1,10 @@
 import sijuda
 
 while True:
-    input_text = input('SIJUDA > ')
+    input_text = input('')
     if input_text.strip() == "": continue
-    result, error = sijuda.run(input_text)
+    result, error = sijuda.run('<stdin>', input_text)
+
     if error:
         print(error.to_string())
     elif result:
