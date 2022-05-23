@@ -154,9 +154,6 @@ class Lexer:
                 tokens.append(Token(T_CPARENTHESES))
                 self.advance()
             elif self.current_char in NUMBERS:  # jeigu simbolis yra 0-9, formuojamas skaičius (int arba float)
-                frequency = 250 * int(self.current_char)  # Set Frequency To 2500 Hertz
-                duration = 100  # Set Duration To 1000 ms == 1 second
-                winsound.Beep(frequency, duration)
                 tokens.append(self.make_number())
             elif self.current_char == '!':
                 tok, error = self.make_not_equals()  # patikrins ar po ! yra = zenklas jei taip, no error
@@ -192,6 +189,9 @@ class Lexer:
                     dot_cnt += 1  # sekamas taškų skaičius
                     number_string += '.'  # prie formuojamo skaičiaus pridedamas taškas
             else:  # jeigu simbolis yra intervale 0-9
+                frequency = 250 * int(self.current_char)  # Set Frequency To 2500 Hertz
+                duration = 100  # Set Duration To 1000 ms == 1 second
+                winsound.Beep(frequency, duration)
                 number_string += self.current_char  # formuojamas skaičius
             self.advance()
 
